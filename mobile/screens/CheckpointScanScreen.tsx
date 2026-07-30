@@ -6,9 +6,11 @@ import {
 import * as Location from "expo-location";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { startSession } from "../lib/checkpoint";
+import { startInspection } from "../lib/supervisor";
 
-export default function CheckpointScanScreen({ onSessionStarted }: {
+export default function CheckpointScanScreen({ onSessionStarted, inspectionMode }: {
   onSessionStarted: (sessionId: string, checkpointName: string) => void;
+  inspectionMode?: boolean;
 }) {
   const [mode, setMode] = useState<"nfc" | "qr">("nfc");
   const [scanning, setScanning] = useState(false);
@@ -27,6 +29,18 @@ export default function CheckpointScanScreen({ onSessionStarted }: {
     const loc = await Location.getCurrentPositionAsync({
       accuracy: Location.Accuracy.High,
     });
+
+    if (inspectionMode) {
+      const res = await startInspection(identifier, mode, loc.coords.latitude, loc.coords.longitude);
+      if (res.success) {
+        Alert.alert("Inspeksi", res.message);
+        onSessionStarted(res.sessionId || "", identifier);
+      } else {
+        Alert.alert("Gagal", res.message);
+      }
+      setLoading(false);
+      return;
+    }
 
     const res = await startSession(
       identifier,

@@ -72,6 +72,7 @@ export default function SupervisorDashboardScreen() {
     return (
       <View style={{ flex: 1 }}>
         <CheckpointScanScreen
+          inspectionMode
           onSessionStarted={(sessionId, name) => {
             setPendingScan({
               id: name.startsWith("qr_") ? name : sessionId,
