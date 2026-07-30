@@ -4,8 +4,6 @@ import {
   ActivityIndicator, Modal, TextInput, ScrollView,
 } from "react-native";
 import * as Location from "expo-location";
-import * as ImagePicker from "expo-image-picker";
-import * as ImageManipulator from "expo-image-manipulator";
 import { useAuth } from "../contexts/AuthContext";
 import { getAttendanceStatus, submitAttendance, uploadPhoto } from "../lib/attendance";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
@@ -61,38 +59,8 @@ export default function CleanerHomeScreen() {
   const handleAttendanceAction = async (type: "check_in" | "check_out", reason?: string) => {
     setActionLoading(true);
 
-    // Ambil foto selfie dengan kamera
-    const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
-    if (camStatus !== "granted") {
-      Alert.alert("Izin Kamera", "Izinkan akses kamera untuk foto selfie.");
-      setActionLoading(false);
-      return;
-    }
-
-    const photoResult = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
-    if (photoResult.canceled || !photoResult.assets?.[0]) {
-      setActionLoading(false);
-      return;
-    }
-
-    // Kompres ke max 1024px JPEG 70%
-    const compressed = await ImageManipulator.manipulateAsync(
-      photoResult.assets[0].uri,
-      [{ resize: { width: 1024 } }],
-      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-    );
-
-    // Upload ke storage (dengan fallback jika lambat)
-    let photoUrl: string | null = null;
-    try {
-      photoUrl = await Promise.race([
-        uploadPhoto(compressed.uri, user?.id || "unknown"),
-        new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
-      ]);
-    } catch {
-      // fallback: upload lambat, lanjut tanpa foto
-    }
-    const finalPhotoUrl = photoUrl || `https://placehold.co/640x480?text=Selfie`;
+    // Testing: skip camera, langsung pakai placeholder
+    const finalPhotoUrl = `https://placehold.co/640x480?text=Selfie-${Date.now()}`;
 
     const loc = location || (await getLocation());
     if (!loc) { setActionLoading(false); return; }
