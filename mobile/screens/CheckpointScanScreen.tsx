@@ -54,11 +54,7 @@ export default function CheckpointScanScreen({ onSessionStarted }: {
   };
 
   const handleSwitchToNfc = () => {
-    Alert.alert(
-      "NFC Tidak Didukung",
-      "Perangkat Anda tidak mendukung NFC. Gunakan QR Code scanner sebagai alternatif.",
-      [{ text: "OK" }]
-    );
+    setMode("nfc");
   };
 
   if (loading) {
@@ -95,7 +91,9 @@ export default function CheckpointScanScreen({ onSessionStarted }: {
 
       {mode === "nfc" && (
         <View style={styles.nfcContainer}>
-          <Text style={styles.nfcHint}>Input NFC Tag ID manual (simulasi NFC untuk development)</Text>
+          <Text style={styles.nfcHint}>
+            NFC hardware tidak tersedia di perangkat ini. Input NFC Tag ID manual untuk simulasi.
+          </Text>
           <TextInput style={styles.input} placeholder="Masukkan NFC Tag ID" value={nfcInput} onChangeText={setNfcInput} autoCapitalize="none" />
           <TouchableOpacity style={styles.scanBtn} onPress={handleNfcSubmit}>
             <Text style={styles.scanBtnText}>Scan NFC</Text>
