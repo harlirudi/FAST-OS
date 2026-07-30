@@ -28,15 +28,14 @@ Deno.serve(async (req) => {
     .eq("auth_id", payload.sub)
     .single();
 
-  if (!dbUser || dbUser.role !== "cleaner") {
-    return err("Hanya cleaner yang bisa patroli", 403);
-  }
-
   const body = await req.json();
   const { action } = body;
 
   // === START SESSION ===
   if (action === "start") {
+    if (!dbUser || dbUser.role !== "cleaner") {
+      return err("Hanya cleaner yang bisa patroli", 403);
+    }
     const { nfc_tag_id, qr_code_hash, latitude, longitude, before_photo_url } = body;
 
     if (!latitude || !longitude) return err("Lokasi diperlukan", 400);
