@@ -37,7 +37,7 @@ Deno.serve(async (req) => {
 
   // === START SESSION ===
   if (action === "start") {
-    const { nfc_tag_id, qr_code_hash, latitude, longitude } = body;
+    const { nfc_tag_id, qr_code_hash, latitude, longitude, before_photo_url } = body;
 
     if (!latitude || !longitude) return err("Lokasi diperlukan", 400);
     if (!nfc_tag_id && !qr_code_hash) return err("NFC tag atau QR code diperlukan", 400);
@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
         log_type: "cleaning",
         start_latitude: latitude,
         start_longitude: longitude,
-        before_photo_url: "", // diupload nanti
+        before_photo_url: before_photo_url || "",
         started_at: new Date().toISOString(),
       })
       .select("id")

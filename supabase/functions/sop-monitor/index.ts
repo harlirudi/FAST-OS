@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { ok, err } from "../_shared/auth.ts";
+import { haversineDistance } from "../_shared/geo.ts";
 
 const ONE_HOUR_MS = 60 * 60 * 1000;
 const ESCALATION_MS = 15 * 60 * 1000;
@@ -18,16 +19,6 @@ async function sendTelegramMessage(chatId: string, text: string) {
   });
 }
 
-function haversineDistance(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371000;
-  const toRad = (d: number) => (d * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a = Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-}
-
 Deno.serve(async (req) => {
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
@@ -38,31 +29,46 @@ Deno.serve(async (req) => {
   const threshold = new Date(now.getTime() - ONE_HOUR_MS).toISOString();
 
   // 1. Cari checkpoint yang overdue
-  //    - belum pernah di-scan (tidak ada di checkpoint_logs)
-  //    - atau finished_at < 1 jam yang lalu
   const { data: allCheckpoints } = await supabase
     .from("checkpoints")
     .select("id, name, site_id");
 
   if (!allCheckpoints) return ok({ message: "Tidak ada checkpoint", alerts: 0 });
 
-  const { data: recentLogs } = await supabase
+  // Cek completed sessions (finished_at)
+  const { data: recentCompleted } = await supabase
     .from("checkpoint_logs")
     .select("checkpoint_id, finished_at")
     .eq("status", "completed")
     .gte("finished_at", threshold)
     .order("finished_at", { ascending: false });
 
-  const lastCompleted: Record<string, string> = {};
-  recentLogs?.forEach((log) => {
-    if (!lastCompleted[log.checkpoint_id]) {
-      lastCompleted[log.checkpoint_id] = log.finished_at;
+  // Cek in_progress sessions (started_at) — stale jika > 1 jam tanpa update
+  const { data: recentInProgress } = await supabase
+    .from("checkpoint_logs")
+    .select("checkpoint_id, started_at")
+    .eq("status", "in_progress")
+    .gte("started_at", threshold)
+    .order("started_at", { ascending: false });
+
+  const lastActivity: Record<string, string> = {};
+
+  // Prioritaskan finished_at dari completed, atau started_at dari in_progress
+  recentCompleted?.forEach((log) => {
+    if (!lastActivity[log.checkpoint_id]) {
+      lastActivity[log.checkpoint_id] = log.finished_at;
+    }
+  });
+  recentInProgress?.forEach((log) => {
+    if (!lastActivity[log.checkpoint_id] ||
+        new Date(log.started_at) > new Date(lastActivity[log.checkpoint_id])) {
+      lastActivity[log.checkpoint_id] = log.started_at;
     }
   });
 
   const overdueIds = allCheckpoints
     .filter((cp) => {
-      const last = lastCompleted[cp.id];
+      const last = lastActivity[cp.id];
       return !last || new Date(last).getTime() < new Date(threshold).getTime();
     })
     .map((cp) => cp.id);

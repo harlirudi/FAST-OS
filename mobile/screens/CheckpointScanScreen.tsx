@@ -20,10 +20,17 @@ export default function CheckpointScanScreen({ onSessionStarted }: {
     (async () => {
       const { status } = await BarCodeScanner.requestPermissionsAsync();
       setHasPermission(status === "granted");
-      // Simulasi NFC: device tidak mendukung NFC → default QR
       setMode("qr");
     })();
   }, []);
+
+  const handleSwitchToNfc = () => {
+    Alert.alert(
+      "NFC Tidak Didukung",
+      "Perangkat Anda tidak mendukung NFC. Gunakan QR Code scanner sebagai alternatif.",
+      [{ text: "OK" }]
+    );
+  };
 
   const handleScan = async (identifier: string) => {
     setLoading(true);
@@ -75,7 +82,7 @@ export default function CheckpointScanScreen({ onSessionStarted }: {
       <View style={styles.modeRow}>
         <TouchableOpacity
           style={[styles.modeBtn, mode === "nfc" && styles.modeActive]}
-          onPress={() => setMode("nfc")}
+          onPress={handleSwitchToNfc}
         >
           <Text style={[styles.modeText, mode === "nfc" && styles.modeActiveText]}>
             NFC
