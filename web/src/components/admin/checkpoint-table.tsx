@@ -20,6 +20,8 @@ type CheckpointRow = {
   logType: string;
   startedAt: string;
   duration: number | null;
+  beforePhotoUrl: string | null;
+  afterPhotoUrl: string | null;
 };
 
 const columns: ColumnDef<CheckpointRow>[] = [
@@ -51,6 +53,30 @@ const columns: ColumnDef<CheckpointRow>[] = [
     header: "Durasi",
     cell: ({ row }) => (row.original.duration != null ? `${row.original.duration} menit` : "-"),
   },
+  {
+    accessorKey: "beforePhotoUrl",
+    header: "Foto Before",
+    cell: ({ row }) =>
+      row.original.beforePhotoUrl ? (
+        <a href={row.original.beforePhotoUrl} target="_blank" className="text-blue-600 underline text-xs">
+          Lihat
+        </a>
+      ) : (
+        <span className="text-gray-400 text-xs">-</span>
+      ),
+  },
+  {
+    accessorKey: "afterPhotoUrl",
+    header: "Foto After",
+    cell: ({ row }) =>
+      row.original.afterPhotoUrl ? (
+        <a href={row.original.afterPhotoUrl} target="_blank" className="text-green-600 underline text-xs">
+          Lihat
+        </a>
+      ) : (
+        <span className="text-gray-400 text-xs">-</span>
+      ),
+  },
 ];
 
 export function CheckpointTable() {
@@ -63,7 +89,7 @@ export function CheckpointTable() {
     setLoading(true);
     let query = supabase
       .from("checkpoint_logs")
-      .select("id, checkpoint_id, site_id, user_id, status, log_type, started_at, duration_minutes, checkpoints(name), sites(name), users(name)")
+      .select("id, checkpoint_id, site_id, user_id, status, log_type, started_at, duration_minutes, before_photo_url, after_photo_url, checkpoints(name), sites(name), users(name)")
       .order("started_at", { ascending: false })
       .limit(200);
 
@@ -85,6 +111,8 @@ export function CheckpointTable() {
         logType: r.log_type,
         startedAt: r.started_at,
         duration: r.duration_minutes,
+        beforePhotoUrl: r.before_photo_url,
+        afterPhotoUrl: r.after_photo_url,
       }))
     );
     setLoading(false);
