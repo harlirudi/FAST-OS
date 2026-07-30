@@ -4,9 +4,10 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./screens/LoginScreen";
 import DashboardScreen from "./screens/DashboardScreen";
+import CleanerHomeScreen from "./screens/CleanerHomeScreen";
 
 function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, role, loading } = useAuth();
 
   if (loading) {
     return (
@@ -16,10 +17,8 @@ function AppNavigator() {
     );
   }
 
-  if (!user) {
-    return <LoginScreen />;
-  }
-
+  if (!user) return <LoginScreen />;
+  if (role === "cleaner") return <CleanerHomeScreen />;
   return <DashboardScreen />;
 }
 
