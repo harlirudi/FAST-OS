@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Alert, FlatList, TextInput, Modal,
+  ActivityIndicator, Alert, FlatList, TextInput, Modal, Image,
 } from "react-native";
 import * as Location from "expo-location";
 import { useAuth } from "../contexts/AuthContext";
@@ -190,6 +190,12 @@ export default function SupervisorDashboardScreen() {
                 <Text style={styles.cardName}>{p.checkpointName}</Text>
                 <Text style={styles.cardSub}>Cleaner: {p.cleanerName}</Text>
                 <Text style={styles.cardSub}>Selesai: {new Date(p.finishedAt).toLocaleString("id-ID")}</Text>
+                {p.beforePhotoUrl ? (
+                  <Image source={{ uri: p.beforePhotoUrl }} style={styles.photoPreview} resizeMode="cover" />
+                ) : null}
+                {p.afterPhotoUrl ? (
+                  <Image source={{ uri: p.afterPhotoUrl }} style={styles.photoPreview} resizeMode="cover" />
+                ) : null}
               </View>
             ))}
             {lastPhotos.length === 0 && <Text style={styles.empty}>Belum ada foto</Text>}
@@ -233,4 +239,5 @@ const styles = StyleSheet.create({
   modalCancelText: { color: "#6b7280", fontSize: 14 },
   modalConfirm: { backgroundColor: "#2563eb", borderRadius: 8, padding: 10, paddingHorizontal: 20 },
   modalConfirmText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  photoPreview: { width: "100%", height: 200, borderRadius: 8, marginTop: 8, backgroundColor: "#f3f4f6" },
 });
