@@ -7,7 +7,7 @@ import * as Location from "expo-location";
 import { useAuth } from "../contexts/AuthContext";
 import { getAttendanceStatus, submitAttendance } from "../lib/attendance";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
-import { getPendingCount, onPendingChange, syncAll } from "../lib/sync";
+import { getPendingCount, onPendingChange, getPendingItems, PendingItem } from "../lib/sync";
 import CheckpointScanScreen from "./CheckpointScanScreen";
 import CheckpointSessionScreen from "./CheckpointSessionScreen";
 
@@ -29,6 +29,7 @@ export default function CleanerHomeScreen() {
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeCheckpointName, setActiveCheckpointName] = useState("");
   const [pendingCount, setPendingCount] = useState(0);
+  const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -100,7 +101,11 @@ export default function CleanerHomeScreen() {
 
   useEffect(() => {
     getPendingCount().then(setPendingCount);
-    const unsub = onPendingChange(setPendingCount);
+    getPendingItems().then(setPendingItems);
+    const unsub = onPendingChange((count) => {
+      setPendingCount(count);
+      getPendingItems().then(setPendingItems);
+    });
     return unsub;
   }, []);
 
@@ -216,6 +221,26 @@ export default function CleanerHomeScreen() {
         )}
       </View>
 
+      {/* Pending sync items */}
+      {pendingItems.length > 0 && (
+        <View style={s.sessionsSection}>
+          <Text style={s.sectionTitle}>Antrian Sinkronisasi</Text>
+          {pendingItems.map((item, idx) => (
+            <View key={idx} style={s.syncItem}>
+              <View style={s.syncInfo}>
+                <Text style={s.syncLabel}>{item.label}</Text>
+                <Text style={s.syncTime}>
+                  {new Date(item.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
+                </Text>
+              </View>
+              <Text style={[s.syncStatus, item.synced ? s.syncedText : s.pendingText]}>
+                {item.synced ? "Tersinkron" : "Tersimpan lokal"}
+              </Text>
+            </View>
+          ))}
+        </View>
+      )}
+
       <TouchableOpacity style={s.logoutBtn} onPress={signOut}>
         <Text style={s.logoutText}>Keluar</Text>
       </TouchableOpacity>
@@ -314,4 +339,14 @@ const s = StyleSheet.create({
   modalCancelText: { color: "#6b7280", fontSize: 14 },
   modalConfirm: { backgroundColor: "#2563eb", borderRadius: 8, padding: 10, paddingHorizontal: 20 },
   modalConfirmText: { color: "#fff", fontSize: 14, fontWeight: "600" },
+  syncItem: {
+    backgroundColor: "#fff", borderRadius: 10, padding: 12, marginBottom: 6,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+  },
+  syncInfo: { flex: 1 },
+  syncLabel: { fontSize: 13, fontWeight: "600", color: "#111827" },
+  syncTime: { fontSize: 11, color: "#9ca3af", marginTop: 2 },
+  syncStatus: { fontSize: 11, fontWeight: "600", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
+  syncedText: { color: "#16a34a", backgroundColor: "#f0fdf4" },
+  pendingText: { color: "#d97706", backgroundColor: "#fef3c7" },
 });
