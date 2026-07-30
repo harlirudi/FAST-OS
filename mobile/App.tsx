@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from "./contexts/AuthContext";
 import LoginScreen from "./screens/LoginScreen";
 import DashboardScreen from "./screens/DashboardScreen";
 import CleanerHomeScreen from "./screens/CleanerHomeScreen";
+import SupervisorDashboardScreen from "./screens/SupervisorDashboardScreen";
 
 function AppNavigator() {
   const { user, role, loading } = useAuth();
@@ -19,6 +20,7 @@ function AppNavigator() {
 
   if (!user) return <LoginScreen />;
   if (role === "cleaner") return <CleanerHomeScreen />;
+  if (role === "supervisor") return <SupervisorDashboardScreen />;
   return <DashboardScreen />;
 }
 

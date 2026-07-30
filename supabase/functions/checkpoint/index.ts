@@ -163,5 +163,51 @@ Deno.serve(async (req) => {
     return ok({ message: "Sesi selesai", duration_minutes: duration });
   }
 
+  // === INSPECTION (supervisor) ===
+  if (action === "inspect") {
+    const { nfc_tag_id, qr_code_hash, latitude, longitude, note } = body;
+
+    if (!latitude || !longitude) return err("Lokasi diperlukan", 400);
+    if (!nfc_tag_id && !qr_code_hash) return err("NFC tag atau QR code diperlukan", 400);
+
+    if (dbUser.role !== "supervisor") return err("Hanya supervisor yang bisa inspeksi", 403);
+
+    // Cari checkpoint
+    let query = supabase.from("checkpoints").select("id, name, site_id");
+    if (nfc_tag_id) query = query.eq("nfc_tag_id", nfc_tag_id);
+    else query = query.eq("qr_code_hash", qr_code_hash);
+
+    const { data: checkpoint } = await query.single();
+    if (!checkpoint) return err("Checkpoint tidak ditemukan", 404);
+
+    // Buat inspection log
+    const { data: session, error: insertErr } = await supabase
+      .from("checkpoint_logs")
+      .insert({
+        checkpoint_id: checkpoint.id,
+        user_id: dbUser.id,
+        site_id: dbUser.site_id,
+        status: "completed",
+        log_type: "inspection",
+        start_latitude: latitude,
+        start_longitude: longitude,
+        before_photo_url: "",
+        after_photo_url: "",
+        inspection_note: note || null,
+        started_at: new Date().toISOString(),
+        finished_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+
+    if (insertErr) return err("Gagal mencatat inspeksi", 500);
+
+    return ok({
+      session_id: session.id,
+      checkpoint_name: checkpoint.name,
+      message: "Inspeksi tercatat",
+    });
+  }
+
   return err("Action tidak dikenal", 400);
 });
