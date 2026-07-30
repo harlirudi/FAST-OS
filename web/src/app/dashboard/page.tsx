@@ -20,7 +20,7 @@ export default async function DashboardPage() {
   const role = dbUser?.role ?? "unknown";
 
   if (role === "admin") {
-    redirect("/admin/sites");
+    redirect("/admin/dashboard");
   }
 
   return (

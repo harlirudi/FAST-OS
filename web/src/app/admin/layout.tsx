@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Building2, MapPin, Users, Radio, LogOut } from "lucide-react";
+import { LayoutDashboard, Building2, MapPin, Users, Radio, LogOut } from "lucide-react";
 
 export default function AdminLayout({
   children,
@@ -7,6 +7,7 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const links = [
+    { href: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/admin/sites", label: "Site", icon: Building2 },
     { href: "/admin/checkpoints", label: "Checkpoint", icon: MapPin },
     { href: "/admin/users", label: "Pengguna", icon: Users },
