@@ -90,6 +90,13 @@ Deno.serve(async (req) => {
 
     if (insertErr) return err("Gagal memulai sesi", 500);
 
+    // Ack: reset SOP alert untuk checkpoint ini
+    await supabase
+      .from("sop_alerts")
+      .update({ acknowledged_at: new Date().toISOString() })
+      .eq("checkpoint_id", checkpoint.id)
+      .eq("acknowledged_at", null);
+
     return ok({
       session_id: session.id,
       checkpoint_name: checkpoint.name,
