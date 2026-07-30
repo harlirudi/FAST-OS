@@ -73,8 +73,8 @@ export default function SupervisorDashboardScreen() {
       <View style={{ flex: 1 }}>
         <CheckpointScanScreen
           inspectionMode
-          onSessionStarted={(sessionId, name) => {
-            setPendingScan({ id: name, mode: "qr" });
+          onSessionStarted={(sessionId, name, scanMode) => {
+            setPendingScan({ id: name, mode: scanMode });
             setShowNoteInput(true);
           }}
         />

@@ -88,7 +88,7 @@ export default function CleanerHomeScreen() {
     setOverrideReason("");
   };
 
-  const handleSessionStarted = (sessionId: string, checkpointName: string) => {
+  const handleSessionStarted = (sessionId: string, checkpointName: string, _mode: string) => {
     setActiveSessionId(sessionId);
     setActiveCheckpointName(checkpointName);
     setScreen("session");

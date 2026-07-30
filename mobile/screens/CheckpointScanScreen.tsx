@@ -8,7 +8,7 @@ import { CameraView, useCameraPermissions } from "expo-camera";
 import { startSession } from "../lib/checkpoint";
 
 export default function CheckpointScanScreen({ onSessionStarted, inspectionMode }: {
-  onSessionStarted: (sessionId: string, checkpointName: string) => void;
+  onSessionStarted: (sessionId: string, checkpointName: string, mode: "nfc" | "qr") => void;
   inspectionMode?: boolean;
 }) {
   const [mode, setMode] = useState<"nfc" | "qr">("nfc");
@@ -31,7 +31,7 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
 
     if (inspectionMode) {
       // Jangan panggil API — supervisor dashboard handle di modal
-      onSessionStarted(identifier, identifier);
+      onSessionStarted(identifier, identifier, mode);
       setLoading(false);
       return;
     }
@@ -45,7 +45,7 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
 
     if (res.success && res.sessionId) {
       Alert.alert("Berhasil", res.message);
-      onSessionStarted(res.sessionId, res.checkpointName || "Checkpoint");
+      onSessionStarted(res.sessionId, res.checkpointName || "Checkpoint", mode);
     } else {
       Alert.alert("Gagal", res.message);
     }
