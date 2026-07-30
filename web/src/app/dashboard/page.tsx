@@ -19,6 +19,10 @@ export default async function DashboardPage() {
 
   const role = dbUser?.role ?? "unknown";
 
+  if (role === "admin") {
+    redirect("/admin/sites");
+  }
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-gray-50">
       <div className="rounded-lg bg-white p-8 shadow">
