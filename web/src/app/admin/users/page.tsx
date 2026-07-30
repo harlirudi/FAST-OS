@@ -18,7 +18,9 @@ type Site = { id: string; name: string };
 function EditUserDialog({ user, sites }: { user: User; sites: Site[] }) {
   return (
     <Dialog>
-      <DialogTrigger><Button variant="outline" size="sm" type="button"><Pencil className="h-3 w-3" /></Button></DialogTrigger>
+      <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
+        <Pencil className="h-3 w-3" />
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Edit Pengguna</DialogTitle></DialogHeader>
         <form action={updateUserRole.bind(null, user.id)} className="space-y-3">

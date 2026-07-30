@@ -29,10 +29,8 @@ type Site = {
 function EditDialog({ site }: { site: Site }) {
   return (
     <Dialog>
-      <DialogTrigger>
-        <Button variant="outline" size="sm" type="button">
-          <Pencil className="h-3 w-3" />
-        </Button>
+      <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
+        <Pencil className="h-3 w-3" />
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Edit Site</DialogTitle></DialogHeader>
@@ -79,8 +77,8 @@ export default function SitesPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Kelola Site</h2>
         <Dialog>
-          <DialogTrigger>
-            <Button type="button"><Plus className="mr-2 h-4 w-4" />Tambah Site</Button>
+          <DialogTrigger className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+            <Plus className="mr-2 inline h-4 w-4" />Tambah Site
           </DialogTrigger>
           <DialogContent>
             <DialogHeader><DialogTitle>Tambah Site Baru</DialogTitle></DialogHeader>

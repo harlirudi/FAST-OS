@@ -19,7 +19,9 @@ type Checkpoint = {
 function PairDialog({ checkpoint }: { checkpoint: Checkpoint }) {
   return (
     <Dialog>
-      <DialogTrigger><Button variant="outline" size="sm" type="button"><Radio className="mr-1 h-3 w-3" />Pasang NFC</Button></DialogTrigger>
+      <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
+        <Radio className="mr-1 inline h-3 w-3" />Pasang NFC
+      </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Pasang NFC Tag — {checkpoint.name}</DialogTitle></DialogHeader>
         <form action={pairNfcTag.bind(null, checkpoint.id)} className="space-y-3">
