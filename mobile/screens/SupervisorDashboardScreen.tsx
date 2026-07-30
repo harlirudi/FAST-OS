@@ -135,9 +135,6 @@ export default function SupervisorDashboardScreen() {
         {/* Team Tab */}
         {tab === "team" && (
           <View>
-            <TouchableOpacity style={styles.inspectBtn} onPress={() => setScanMode(true)}>
-              <Text style={styles.inspectBtnText}>Inspeksi Checkpoint</Text>
-            </TouchableOpacity>
             {team.map((m) => (
               <View key={m.id} style={styles.card}>
                 <View style={styles.cardRow}>
@@ -157,6 +154,9 @@ export default function SupervisorDashboardScreen() {
         {/* Inspections Tab */}
         {tab === "inspections" && (
           <View>
+            <TouchableOpacity style={styles.inspectBtn} onPress={() => setScanMode(true)}>
+              <Text style={styles.inspectBtnText}>Inspeksi Checkpoint</Text>
+            </TouchableOpacity>
             {inspections.map((ins) => (
               <View key={ins.id} style={styles.card}>
                 <Text style={styles.cardName}>{ins.checkpointName}</Text>
