@@ -1,4 +1,5 @@
 import { supabase, supabaseUrl } from "./supabase";
+import { isOnline, enqueue } from "./sync";
 
 export type AttendanceStatus = {
   checkedIn: boolean;
@@ -70,6 +71,24 @@ export async function submitAttendance(
   photoUrl: string,
   overrideReason?: string
 ): Promise<{ success: boolean; message: string }> {
+  // Offline: simpan ke antrian
+  if (!isOnline()) {
+    if (type === "check_in") {
+      await enqueue({
+        type: "check_in",
+        payload: { latitude, longitude, photoUrl, reason: overrideReason },
+        createdAt: new Date().toISOString(),
+      });
+    } else {
+      await enqueue({
+        type: "check_out",
+        payload: { latitude, longitude, photoUrl },
+        createdAt: new Date().toISOString(),
+      });
+    }
+    return { success: true, message: "Tersimpan lokal. Akan disinkron saat online." };
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
 
   const res = await fetch(

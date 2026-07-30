@@ -7,6 +7,7 @@ import * as Location from "expo-location";
 import { useAuth } from "../contexts/AuthContext";
 import { getAttendanceStatus, submitAttendance } from "../lib/attendance";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
+import { getPendingCount, onPendingChange, syncAll } from "../lib/sync";
 import CheckpointScanScreen from "./CheckpointScanScreen";
 import CheckpointSessionScreen from "./CheckpointSessionScreen";
 
@@ -27,6 +28,7 @@ export default function CleanerHomeScreen() {
   const [sessions, setSessions] = useState<CheckpointSession[]>([]);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [activeCheckpointName, setActiveCheckpointName] = useState("");
+  const [pendingCount, setPendingCount] = useState(0);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
@@ -96,6 +98,12 @@ export default function CleanerHomeScreen() {
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
 
+  useEffect(() => {
+    getPendingCount().then(setPendingCount);
+    const unsub = onPendingChange(setPendingCount);
+    return unsub;
+  }, []);
+
   // --- Scan Screen ---
   if (screen === "scan") {
     return (
@@ -132,8 +140,17 @@ export default function CleanerHomeScreen() {
   return (
     <ScrollView style={s.container} contentContainerStyle={s.content}>
       <View style={s.header}>
-        <Text style={s.greeting}>Halo, Cleaner!</Text>
-        <Text style={s.site}>{siteName || "Belum ditugaskan"}</Text>
+        <View style={s.headerRow}>
+          <View>
+            <Text style={s.greeting}>Halo, Cleaner!</Text>
+            <Text style={s.site}>{siteName || "Belum ditugaskan"}</Text>
+          </View>
+          {pendingCount > 0 && (
+            <View style={s.badge}>
+              <Text style={s.badgeText}>{pendingCount} pending</Text>
+            </View>
+          )}
+        </View>
       </View>
 
       <View style={s.statusCard}>
@@ -236,6 +253,11 @@ const s = StyleSheet.create({
   content: { padding: 20, paddingTop: 60 },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: { marginBottom: 24 },
+  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
+  badge: {
+    backgroundColor: "#fef3c7", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4,
+  },
+  badgeText: { color: "#92400e", fontSize: 12, fontWeight: "600" },
   greeting: { fontSize: 22, fontWeight: "bold", color: "#111827" },
   site: { fontSize: 14, color: "#6b7280", marginTop: 4 },
   statusCard: {

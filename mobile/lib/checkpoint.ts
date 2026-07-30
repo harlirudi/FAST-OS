@@ -1,4 +1,5 @@
 import { supabase, supabaseUrl } from "./supabase";
+import { isOnline, enqueue } from "./sync";
 
 export type CheckpointSession = {
   id: string;
@@ -18,6 +19,15 @@ export async function startSession(
   latitude: number,
   longitude: number
 ): Promise<{ success: boolean; message: string; sessionId?: string; checkpointName?: string }> {
+  if (!isOnline()) {
+    await enqueue({
+      type: "checkpoint_start",
+      payload: { identifier, mode, latitude, longitude },
+      createdAt: new Date().toISOString(),
+    });
+    return { success: true, message: "Tersimpan lokal. Akan disinkron saat online.", sessionId: "local-" + Date.now(), checkpointName: identifier };
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch(`${supabaseUrl}/functions/v1/checkpoint`, {
     method: "POST",
@@ -48,6 +58,15 @@ export async function uploadSessionPhoto(
   photoType: "before" | "after",
   photoUrl: string
 ): Promise<{ success: boolean; message: string }> {
+  if (!isOnline()) {
+    await enqueue({
+      type: "checkpoint_photo",
+      payload: { sessionId, photoType, photoUrl },
+      createdAt: new Date().toISOString(),
+    });
+    return { success: true, message: "Tersimpan lokal." };
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch(`${supabaseUrl}/functions/v1/checkpoint`, {
     method: "POST",
@@ -68,6 +87,15 @@ export async function completeSession(
   latitude: number,
   longitude: number
 ): Promise<{ success: boolean; message: string; duration?: number }> {
+  if (!isOnline()) {
+    await enqueue({
+      type: "checkpoint_complete",
+      payload: { sessionId, photoUrl, latitude, longitude },
+      createdAt: new Date().toISOString(),
+    });
+    return { success: true, message: "Tersimpan lokal. Akan disinkron saat online." };
+  }
+
   const { data: { session } } = await supabase.auth.getSession();
   const res = await fetch(`${supabaseUrl}/functions/v1/checkpoint`, {
     method: "POST",
