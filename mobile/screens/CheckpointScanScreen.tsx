@@ -92,7 +92,7 @@ export default function CheckpointScanScreen({ onSessionStarted }: {
       {mode === "nfc" && (
         <View style={styles.nfcContainer}>
           <Text style={styles.nfcHint}>
-            NFC hardware tidak tersedia di perangkat ini. Input NFC Tag ID manual untuk simulasi.
+            NFC hanya tersedia di development build, bukan Expo Go. Input NFC Tag ID manual di sini.
           </Text>
           <TextInput style={styles.input} placeholder="Masukkan NFC Tag ID" value={nfcInput} onChangeText={setNfcInput} autoCapitalize="none" />
           <TouchableOpacity style={styles.scanBtn} onPress={handleNfcSubmit}>
