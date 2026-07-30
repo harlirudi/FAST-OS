@@ -82,18 +82,22 @@ export default function CleanerHomeScreen() {
       { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
     );
 
-    // Upload ke storage
-    const photoUrl = await uploadPhoto(compressed.uri, user?.id || "unknown");
-    if (!photoUrl) {
-      Alert.alert("Error", "Gagal upload foto.");
-      setActionLoading(false);
-      return;
+    // Upload ke storage (dengan fallback jika lambat)
+    let photoUrl: string | null = null;
+    try {
+      photoUrl = await Promise.race([
+        uploadPhoto(compressed.uri, user?.id || "unknown"),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 5000)),
+      ]);
+    } catch {
+      // fallback: upload lambat, lanjut tanpa foto
     }
+    const finalPhotoUrl = photoUrl || `https://placehold.co/640x480?text=Selfie`;
 
     const loc = location || (await getLocation());
     if (!loc) { setActionLoading(false); return; }
 
-    const res = await submitAttendance(type, loc.coords.latitude, loc.coords.longitude, photoUrl, reason);
+    const res = await submitAttendance(type, loc.coords.latitude, loc.coords.longitude, finalPhotoUrl, reason);
 
     if (res.success) {
       Alert.alert("Berhasil", res.message);
