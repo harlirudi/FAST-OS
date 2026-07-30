@@ -1,2 +1,8 @@
 supabase/.temp/
 supabase/.branches/
+node_modules/
+.next/
+.env*.local
+*.tsbuildinfo
+dist/
+.expo/
