@@ -74,10 +74,7 @@ export default function SupervisorDashboardScreen() {
         <CheckpointScanScreen
           inspectionMode
           onSessionStarted={(sessionId, name) => {
-            setPendingScan({
-              id: name.startsWith("qr_") ? name : sessionId,
-              mode: "qr",
-            });
+            setPendingScan({ id: name, mode: "qr" });
             setShowNoteInput(true);
           }}
         />
