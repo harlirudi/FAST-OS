@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { pairNfcTag } from "@/lib/supabase/admin-actions";
+import { pairNfcTag } from "@/lib/supabase/checkpoint-actions";
 import { Radio } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 

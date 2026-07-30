@@ -15,7 +15,7 @@ import {
   createCheckpoint,
   updateCheckpoint,
   deleteCheckpoint,
-} from "@/lib/supabase/admin-actions";
+} from "@/lib/supabase/checkpoint-actions";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 

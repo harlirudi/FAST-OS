@@ -10,7 +10,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { createSite, updateSite, deleteSite } from "@/lib/supabase/admin-actions";
+import { createSite, updateSite, deleteSite } from "@/lib/supabase/site-actions";
 import { Pencil, Trash2, Plus } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 

@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { updateUserRole, deleteUser } from "@/lib/supabase/admin-actions";
+import { updateUserRole, deleteUser } from "@/lib/supabase/user-actions";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 

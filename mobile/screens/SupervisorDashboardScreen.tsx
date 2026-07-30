@@ -36,16 +36,16 @@ export default function SupervisorDashboardScreen() {
     if (!dbUser?.site_id) { setLoading(false); return; }
     setSiteId(dbUser.site_id);
 
-    const [t, o, p, i] = await Promise.all([
+    const [teamData, overridesData, photosData, inspectionsData] = await Promise.all([
       getTeamStatus(dbUser.site_id),
       getOverrides(dbUser.site_id),
       getLastCleaningPerCheckpoint(dbUser.site_id),
       getMyInspections(),
     ]);
-    setTeam(t);
-    setOverrides(o);
-    setLastPhotos(p);
-    setInspections(i);
+    setTeam(teamData);
+    setOverrides(overridesData);
+    setLastPhotos(photosData);
+    setInspections(inspectionsData);
     setLoading(false);
   }, [user]);
 
@@ -81,22 +81,22 @@ export default function SupervisorDashboardScreen() {
           }}
         />
         <Modal visible={showNoteInput} transparent animationType="fade">
-          <View style={s.modalOverlay}>
-            <View style={s.modalCard}>
-              <Text style={s.modalTitle}>Catatan Inspeksi</Text>
-              <TextInput style={s.modalInput} placeholder="Catatan (opsional)" value={inspectNote} onChangeText={setInspectNote} multiline />
-              <View style={s.modalBtns}>
-                <TouchableOpacity style={s.modalCancel} onPress={() => { setShowNoteInput(false); setInspectNote(""); }}>
-                  <Text style={s.modalCancelText}>Lewati</Text>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalCard}>
+              <Text style={styles.modalTitle}>Catatan Inspeksi</Text>
+              <TextInput style={styles.modalInput} placeholder="Catatan (opsional)" value={inspectNote} onChangeText={setInspectNote} multiline />
+              <View style={styles.modalBtns}>
+                <TouchableOpacity style={styles.modalCancel} onPress={() => { setShowNoteInput(false); setInspectNote(""); }}>
+                  <Text style={styles.modalCancelText}>Lewati</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={s.modalConfirm} onPress={() => handleInspection(inspectNote || undefined)}>
-                  <Text style={s.modalConfirmText}>Simpan</Text>
+                <TouchableOpacity style={styles.modalConfirm} onPress={() => handleInspection(inspectNote || undefined)}>
+                  <Text style={styles.modalConfirmText}>Simpan</Text>
                 </TouchableOpacity>
               </View>
             </View>
           </View>
         </Modal>
-        <TouchableOpacity style={s.backFloating} onPress={() => setScanMode(false)}>
+        <TouchableOpacity style={styles.backFloating} onPress={() => setScanMode(false)}>
           <Text style={{ color: "#6b7280" }}>Kembali</Text>
         </TouchableOpacity>
       </View>
@@ -105,48 +105,48 @@ export default function SupervisorDashboardScreen() {
 
   if (loading) {
     return (
-      <View style={s.center}>
+      <View style={styles.center}>
         <ActivityIndicator size="large" color="#2563eb" />
       </View>
     );
   }
 
   return (
-    <View style={s.container}>
-      <View style={s.header}>
-        <Text style={s.title}>Dashboard Supervisor</Text>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <Text style={styles.title}>Dashboard Supervisor</Text>
         <TouchableOpacity onPress={signOut}>
-          <Text style={s.logoutBtn}>Keluar</Text>
+          <Text style={styles.logoutBtn}>Keluar</Text>
         </TouchableOpacity>
       </View>
 
       {/* Tabs */}
-      <View style={s.tabs}>
+      <View style={styles.tabs}>
         {(["team", "inspections", "overrides", "photos"] as Tab[]).map((t) => (
-          <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
-            <Text style={[s.tabText, tab === t && s.tabActiveText]}>
+          <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
+            <Text style={[styles.tabText, tab === t && styles.tabActiveText]}>
               {t === "team" ? "Tim" : t === "inspections" ? "Inspeksi" : t === "overrides" ? "Override" : "Foto"}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView style={s.content}>
+      <ScrollView style={styles.content}>
         {/* Team Tab */}
         {tab === "team" && (
           <View>
-            <TouchableOpacity style={s.inspectBtn} onPress={() => setScanMode(true)}>
-              <Text style={s.inspectBtnText}>Inspeksi Checkpoint</Text>
+            <TouchableOpacity style={styles.inspectBtn} onPress={() => setScanMode(true)}>
+              <Text style={styles.inspectBtnText}>Inspeksi Checkpoint</Text>
             </TouchableOpacity>
             {team.map((m) => (
-              <View key={m.id} style={s.card}>
-                <View style={s.cardRow}>
-                  <Text style={s.cardName}>{m.name}</Text>
-                  <Text style={[s.cardStatus, m.checkedIn ? s.statusIn : s.statusOut]}>
+              <View key={m.id} style={styles.card}>
+                <View style={styles.cardRow}>
+                  <Text style={styles.cardName}>{m.name}</Text>
+                  <Text style={[styles.cardStatus, m.checkedIn ? styles.statusIn : styles.statusOut]}>
                     {m.checkedIn ? "Check-in" : "Belum"}
                   </Text>
                 </View>
-                <Text style={s.cardSub}>
+                <Text style={styles.cardSub}>
                   {m.completedCheckpoints}/{m.totalCheckpoints} checkpoint selesai
                 </Text>
               </View>
@@ -158,13 +158,13 @@ export default function SupervisorDashboardScreen() {
         {tab === "inspections" && (
           <View>
             {inspections.map((ins) => (
-              <View key={ins.id} style={s.card}>
-                <Text style={s.cardName}>{ins.checkpointName}</Text>
-                <Text style={s.cardSub}>{new Date(ins.finishedAt).toLocaleString("id-ID")}</Text>
-                {ins.note && <Text style={s.cardNote}>{ins.note}</Text>}
+              <View key={ins.id} style={styles.card}>
+                <Text style={styles.cardName}>{ins.checkpointName}</Text>
+                <Text style={styles.cardSub}>{new Date(ins.finishedAt).toLocaleString("id-ID")}</Text>
+                {ins.note && <Text style={styles.cardNote}>{ins.note}</Text>}
               </View>
             ))}
-            {inspections.length === 0 && <Text style={s.empty}>Belum ada inspeksi</Text>}
+            {inspections.length === 0 && <Text style={styles.empty}>Belum ada inspeksi</Text>}
           </View>
         )}
 
@@ -172,13 +172,13 @@ export default function SupervisorDashboardScreen() {
         {tab === "overrides" && (
           <View>
             {overrides.map((o) => (
-              <View key={o.id} style={s.card}>
-                <Text style={s.cardName}>{o.userName}</Text>
-                <Text style={s.cardSub}>{new Date(o.timestamp).toLocaleString("id-ID")}</Text>
-                <Text style={s.cardNote}>Alasan: {o.overrideReason}</Text>
+              <View key={o.id} style={styles.card}>
+                <Text style={styles.cardName}>{o.userName}</Text>
+                <Text style={styles.cardSub}>{new Date(o.timestamp).toLocaleString("id-ID")}</Text>
+                <Text style={styles.cardNote}>Alasan: {o.overrideReason}</Text>
               </View>
             ))}
-            {overrides.length === 0 && <Text style={s.empty}>Tidak ada override</Text>}
+            {overrides.length === 0 && <Text style={styles.empty}>Tidak ada override</Text>}
           </View>
         )}
 
@@ -186,13 +186,13 @@ export default function SupervisorDashboardScreen() {
         {tab === "photos" && (
           <View>
             {lastPhotos.map((p) => (
-              <View key={p.id} style={s.card}>
-                <Text style={s.cardName}>{p.checkpointName}</Text>
-                <Text style={s.cardSub}>Cleaner: {p.cleanerName}</Text>
-                <Text style={s.cardSub}>Selesai: {new Date(p.finishedAt).toLocaleString("id-ID")}</Text>
+              <View key={p.id} style={styles.card}>
+                <Text style={styles.cardName}>{p.checkpointName}</Text>
+                <Text style={styles.cardSub}>Cleaner: {p.cleanerName}</Text>
+                <Text style={styles.cardSub}>Selesai: {new Date(p.finishedAt).toLocaleString("id-ID")}</Text>
               </View>
             ))}
-            {lastPhotos.length === 0 && <Text style={s.empty}>Belum ada foto</Text>}
+            {lastPhotos.length === 0 && <Text style={styles.empty}>Belum ada foto</Text>}
           </View>
         )}
       </ScrollView>
@@ -200,7 +200,7 @@ export default function SupervisorDashboardScreen() {
   );
 }
 
-const s = StyleSheet.create({
+const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f3f4f6" },
   center: { flex: 1, justifyContent: "center", alignItems: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 60, backgroundColor: "#fff" },

@@ -1,0 +1,39 @@
+"use server";
+
+import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
+
+export async function createSite(formData: FormData) {
+  const supabase = await createClient();
+  await supabase.from("sites").insert({
+    name: formData.get("name") as string,
+    latitude: parseFloat(formData.get("latitude") as string),
+    longitude: parseFloat(formData.get("longitude") as string),
+    radius_meters: parseInt(formData.get("radius_meters") as string) || 50,
+  });
+  revalidatePath("/admin/sites");
+  redirect("/admin/sites");
+}
+
+export async function updateSite(id: string, formData: FormData) {
+  const supabase = await createClient();
+  await supabase
+    .from("sites")
+    .update({
+      name: formData.get("name") as string,
+      latitude: parseFloat(formData.get("latitude") as string),
+      longitude: parseFloat(formData.get("longitude") as string),
+      radius_meters: parseInt(formData.get("radius_meters") as string) || 50,
+    })
+    .eq("id", id);
+  revalidatePath("/admin/sites");
+  redirect("/admin/sites");
+}
+
+export async function deleteSite(id: string) {
+  "use server";
+  const supabase = await createClient();
+  await supabase.from("sites").delete().eq("id", id);
+  revalidatePath("/admin/sites");
+}
