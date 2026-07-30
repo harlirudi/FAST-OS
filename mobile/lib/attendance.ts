@@ -1,5 +1,6 @@
 import { supabase, supabaseUrl } from "./supabase";
 import { isOnline, enqueue } from "./sync";
+import * as FileSystem from "expo-file-system";
 
 export type AttendanceStatus = {
   checkedIn: boolean;
@@ -117,15 +118,23 @@ export async function submitAttendance(
 }
 
 export async function uploadPhoto(uri: string, userId: string): Promise<string | null> {
-  const res = await fetch(uri);
-  const blob = await res.blob();
+  const base64 = await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=";
+  const bytes: number[] = [];
+  for (let i = 0; i < base64.length; i += 4) {
+    const e = chars.indexOf(base64[i]), f = chars.indexOf(base64[i + 1]);
+    const g = chars.indexOf(base64[i + 2]), h = chars.indexOf(base64[i + 3]);
+    bytes.push((e << 2) | (f >> 4));
+    if (g !== 64) bytes.push(((f & 15) << 4) | (g >> 2));
+    if (h !== 64) bytes.push(((g & 3) << 6) | h);
+  }
 
   const ext = uri.endsWith(".jpg") || uri.endsWith(".jpeg") ? "jpg" : "png";
   const fileName = `${userId}/${Date.now()}.${ext}`;
 
   const { error } = await supabase.storage
     .from("attendance-photos")
-    .upload(fileName, blob, { contentType: `image/${ext}` });
+    .upload(fileName, new Uint8Array(bytes), { contentType: `image/${ext}` });
 
   if (error) {
     console.error("Upload error:", error);
