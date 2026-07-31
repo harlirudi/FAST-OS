@@ -1,12 +1,10 @@
-"use client";
-
-export const dynamic = "force-dynamic";
-
 import { createClient } from "@/lib/supabase/server";
 import { DashboardStats } from "@/components/admin/dashboard-stats";
 import { CompletionChart } from "@/components/admin/completion-chart";
 import { AttendanceTable } from "@/components/admin/attendance-table";
 import { CheckpointTable } from "@/components/admin/checkpoint-table";
+
+export const dynamic = "force-dynamic";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -36,11 +34,8 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-6">
       <h2 className="text-2xl font-bold">Dashboard</h2>
-
       <DashboardStats />
-
       <CompletionChart data={completionData} />
-
       <AttendanceTable />
       <CheckpointTable />
     </div>
