@@ -7,7 +7,7 @@ import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useAuth } from "../contexts/AuthContext";
-import { getAttendanceStatus, submitAttendance, uploadPhoto } from "../lib/attendance";
+import { getAttendanceStatus, submitAttendance } from "../lib/attendance";
 import { supabase } from "../lib/supabase";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
 import { getPendingCount, onPendingChange, getPendingItems, PendingItem } from "../lib/sync";
@@ -25,7 +25,6 @@ export default function CleanerHomeScreen() {
   const [siteName, setSiteName] = useState<string | null>(null);
   const [completedCP, setCompletedCP] = useState(0);
   const [totalCP, setTotalCP] = useState(0);
-  const [location, setLocation] = useState<Location.LocationObject | null>(null);
   const [showOverride, setShowOverride] = useState(false);
   const [overrideReason, setOverrideReason] = useState("");
   const [sessions, setSessions] = useState<CheckpointSession[]>([]);
@@ -33,13 +32,13 @@ export default function CleanerHomeScreen() {
   const [activeCheckpointName, setActiveCheckpointName] = useState("");
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
+  const [pendingAction, setPendingAction] = useState<"check_in" | "check_out" | null>(null);
+  const [pendingPhotoUrl, setPendingPhotoUrl] = useState("");
+  const [pendingLoc, setPendingLoc] = useState<{ lat: number; lng: number } | null>(null);
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
-    const [status, todaySessions] = await Promise.all([
-      getAttendanceStatus(),
-      getTodaySessions(),
-    ]);
+    const [status, todaySessions] = await Promise.all([getAttendanceStatus(), getTodaySessions()]);
     setCheckedIn(status.checkedIn);
     setSiteName(status.siteName);
     setCompletedCP(status.completedCheckpoints);
@@ -48,343 +47,129 @@ export default function CleanerHomeScreen() {
     setLoading(false);
   }, []);
 
-  const getLocation = async () => {
-    const { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert("Izin GPS", "Aktifkan GPS untuk absensi.");
-      return null;
-    }
-    const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-    setLocation(loc);
-    return loc;
+  const takePhotoAndUpload = async (): Promise<string> => {
+    const cam = await ImagePicker.requestCameraPermissionsAsync();
+    if (!cam.granted) throw new Error("Izin kamera ditolak");
+    const r = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
+    if (r.canceled || !r.assets?.[0]) throw new Error("Dibatalkan");
+    const compressed = await ImageManipulator.manipulateAsync(r.assets[0].uri, [{ resize: { width: 1024 } }],
+      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG });
+    let url = `https://placehold.co/640x480?text=${Date.now()}`;
+    try {
+      const blob = await fetch(compressed.uri).then(res => res.blob());
+      const name = `${user?.id || "u"}/${Date.now()}.jpg`;
+      const { error } = await supabase.storage.from("attendance-photos").upload(name, blob,
+        { contentType: "image/jpeg", upsert: true });
+      if (!error) url = supabase.storage.from("attendance-photos").getPublicUrl(name).data.publicUrl;
+    } catch {}
+    return url;
   };
 
-  const handleAttendanceAction = async (type: "check_in" | "check_out", reason?: string) => {
-    setActionLoading(true);
-
-    // Ambil foto selfie dengan kamera
-    const { status: camStatus } = await ImagePicker.requestCameraPermissionsAsync();
-    if (camStatus !== "granted") {
-      Alert.alert("Izin Kamera", "Izinkan akses kamera untuk foto selfie.");
-      setActionLoading(false);
-      return;
-    }
-
-    const photoResult = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
-    if (photoResult.canceled || !photoResult.assets?.[0]) {
-      setActionLoading(false);
-      return;
-    }
-
-    // Kompres ke max 1024px JPEG 70%
-    const compressed = await ImageManipulator.manipulateAsync(
-      photoResult.assets[0].uri,
-      [{ resize: { width: 1024 } }],
-      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
-    );
-
-    // Upload via fetch (lebih cepat dari base64)
-    let finalPhotoUrl = `https://placehold.co/640x480?text=Selfie-${Date.now()}`;
-    try {
-      const blob = await fetch(compressed.uri).then(r => r.blob());
-      const ext = "jpg";
-      const fileName = `${user?.id || "u"}/${Date.now()}.${ext}`;
-      const { error: upErr } = await supabase.storage
-        .from("attendance-photos")
-        .upload(fileName, blob, { contentType: "image/jpeg", upsert: true });
-      if (!upErr) {
-        const { data } = supabase.storage.from("attendance-photos").getPublicUrl(fileName);
-        finalPhotoUrl = data.publicUrl;
-      }
-    } catch {} // fallback ke placeholder
-
-    const loc = location || (await getLocation());
-    if (!loc) { setActionLoading(false); return; }
-
-    const res = await submitAttendance(type, loc.coords.latitude, loc.coords.longitude, finalPhotoUrl, reason);
-
+  const doSubmit = async (type: "check_in" | "check_out", photoUrl: string, loc: { lat: number; lng: number }, reason?: string) => {
+    const res = await submitAttendance(type, loc.lat, loc.lng, photoUrl, reason);
     if (res.success) {
       Alert.alert("Berhasil", res.message);
       await loadStatus();
-    } else if (res.message.includes("m dari site")) {
+      return true;
+    }
+    if (res.message.includes("m dari site")) {
+      setPendingAction(type);
+      setPendingPhotoUrl(photoUrl);
+      setPendingLoc(loc);
       setShowOverride(true);
-    } else {
-      Alert.alert("Gagal", res.message);
+      return false;
+    }
+    Alert.alert("Gagal", res.message);
+    return false;
+  };
+
+  const handleAttendance = async (type: "check_in" | "check_out") => {
+    setActionLoading(true);
+    try {
+      const photoUrl = await takePhotoAndUpload();
+      const l = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      await doSubmit(type, photoUrl, { lat: l.coords.latitude, lng: l.coords.longitude });
+    } catch (e: any) {
+      if (e.message !== "Dibatalkan") Alert.alert("Error", e.message);
     }
     setActionLoading(false);
   };
 
-  const handleOverrideSubmit = () => {
-    if (!overrideReason.trim()) {
-      Alert.alert("Perhatian", "Isi alasan override terlebih dahulu.");
-      return;
-    }
+  const handleOverride = async () => {
+    if (!overrideReason.trim()) { Alert.alert("Isi alasan"); return; }
+    if (!pendingAction || !pendingPhotoUrl || !pendingLoc) return;
     setShowOverride(false);
-    handleAttendanceAction("check_in", overrideReason.trim());
+    setActionLoading(true);
+    await doSubmit(pendingAction, pendingPhotoUrl, pendingLoc, overrideReason.trim());
     setOverrideReason("");
+    setActionLoading(false);
   };
 
-  const handleSessionStarted = (sessionId: string, checkpointName: string, _mode: string) => {
-    setActiveSessionId(sessionId);
-    setActiveCheckpointName(checkpointName);
-    setScreen("session");
-  };
-
-  const handleSessionComplete = async () => {
-    setScreen("home");
-    await loadStatus();
-  };
+  const handleSessionStarted = (sId: string, cpName: string) => { setActiveSessionId(sId); setActiveCheckpointName(cpName); setScreen("session"); };
+  const handleSessionDone = async () => { setScreen("home"); await loadStatus(); };
 
   useEffect(() => { loadStatus(); }, [loadStatus]);
+  useEffect(() => { getPendingCount().then(setPendingCount); getPendingItems().then(setPendingItems);
+    return onPendingChange(c => { setPendingCount(c); getPendingItems().then(setPendingItems); }); }, []);
 
-  useEffect(() => {
-    getPendingCount().then(setPendingCount);
-    getPendingItems().then(setPendingItems);
-    const unsub = onPendingChange((count) => {
-      setPendingCount(count);
-      getPendingItems().then(setPendingItems);
-    });
-    return unsub;
-  }, []);
-
-  // --- Scan Screen ---
-  if (screen === "scan") {
-    return (
-      <View style={{ flex: 1 }}>
-        <CheckpointScanScreen onSessionStarted={handleSessionStarted} />
-        <TouchableOpacity style={s.backAbsolute} onPress={() => setScreen("home")}>
-          <Text style={{ color: "#6b7280", fontSize: 14 }}>Kembali</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-
-  // --- Session Screen ---
-  if (screen === "session" && activeSessionId) {
-    return (
-      <CheckpointSessionScreen
-        sessionId={activeSessionId}
-        checkpointName={activeCheckpointName}
-        onComplete={handleSessionComplete}
-        onBack={() => setScreen("home")}
-      />
-    );
-  }
-
-  // --- Home Screen ---
-  if (loading) {
-    return (
-      <View style={s.center}>
-        <ActivityIndicator size="large" color="#2563eb" />
-      </View>
-    );
-  }
+  if (screen === "scan") return <View style={{flex:1}}><CheckpointScanScreen onSessionStarted={handleSessionStarted} /><TouchableOpacity style={{position:"absolute",top:60,left:20}} onPress={()=>setScreen("home")}><Text style={{color:"#6b7280"}}>Kembali</Text></TouchableOpacity></View>;
+  if (screen === "session" && activeSessionId) return <CheckpointSessionScreen sessionId={activeSessionId} checkpointName={activeCheckpointName} onComplete={handleSessionDone} onBack={()=>setScreen("home")} />;
+  if (loading) return <View style={S.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
 
   return (
-    <ScrollView style={s.container} contentContainerStyle={s.content}>
-      <View style={s.header}>
-        <View style={s.headerRow}>
-          <View>
-            <Text style={s.greeting}>Halo, Cleaner!</Text>
-            <Text style={s.site}>{siteName || "Belum ditugaskan"}</Text>
-          </View>
-          {pendingCount > 0 && (
-            <View style={s.badge}>
-              <Text style={s.badgeText}>{pendingCount} pending</Text>
-            </View>
-          )}
-        </View>
+    <ScrollView style={S.container} contentContainerStyle={S.content}>
+      <View style={S.headerRow}>
+        <View><Text style={S.greeting}>Halo, Cleaner!</Text><Text style={S.site}>{siteName||"Belum ditugaskan"}</Text></View>
+        {pendingCount>0 && <View style={S.badge}><Text style={S.badgeText}>{pendingCount} pending</Text></View>}
       </View>
-
-      <View style={s.statusCard}>
-        <View style={s.statusRow}>
-          <Text style={s.statusLabel}>Status</Text>
-          <Text style={[s.statusValue, checkedIn ? s.statusIn : s.statusOut]}>
-            {checkedIn ? "Sudah Check-in" : "Belum Check-in"}
-          </Text>
-        </View>
-        <View style={s.progressRow}>
-          <Text style={s.statusLabel}>Checkpoint</Text>
-          <Text style={s.progressValue}>{completedCP} / {totalCP} selesai</Text>
-        </View>
+      <View style={S.statusCard}>
+        <View style={S.statusRow}><Text style={S.statusLabel}>Status</Text><Text style={[S.statusValue,checkedIn?S.statusIn:S.statusOut]}>{checkedIn?"Sudah Check-in":"Belum Check-in"}</Text></View>
+        <View style={S.statusRow}><Text style={S.statusLabel}>Checkpoint</Text><Text style={S.progressValue}>{completedCP}/{totalCP} selesai</Text></View>
       </View>
-
-      {/* Check-in/out button */}
-      <TouchableOpacity
-        style={[s.mainBtn, checkedIn ? s.checkoutBtn : s.checkinBtn, actionLoading && s.btnDisabled]}
-        onPress={() => handleAttendanceAction(checkedIn ? "check_out" : "check_in")}
-        disabled={actionLoading}
-      >
-        {actionLoading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={s.mainBtnText}>{checkedIn ? "Check-Out" : "Check-In"}</Text>
-        )}
+      <TouchableOpacity style={[S.mainBtn,checkedIn?S.checkoutBtn:S.checkinBtn,actionLoading&&S.btnDisabled]} onPress={()=>handleAttendance(checkedIn?"check_out":"check_in")} disabled={actionLoading}>
+        {actionLoading?<ActivityIndicator color="#fff"/>:<Text style={S.mainBtnText}>{checkedIn?"Check-Out":"Check-In"}</Text>}
       </TouchableOpacity>
-
-      {/* Scan checkpoint button */}
-      <TouchableOpacity
-        style={[s.scanBtn, !checkedIn && s.btnDisabled]}
-        onPress={() => setScreen("scan")}
-        disabled={!checkedIn}
-      >
-        <Text style={s.scanBtnText}>Scan Checkpoint</Text>
-      </TouchableOpacity>
-
-      {/* Today's sessions */}
-      <View style={s.sessionsSection}>
-        <Text style={s.sectionTitle}>Riwayat Hari Ini</Text>
-        {sessions.length === 0 ? (
-          <Text style={s.emptyText}>Belum ada sesi pembersihan hari ini.</Text>
-        ) : (
-          sessions.map((session) => (
-            <View key={session.id} style={s.sessionCard}>
-              <View style={s.sessionInfo}>
-                <Text style={s.sessionName}>{session.checkpoints?.name || "Checkpoint"}</Text>
-                <Text style={s.sessionTime}>
-                  {new Date(session.started_at).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                  {session.duration_minutes ? ` — ${session.duration_minutes} menit` : ""}
-                </Text>
-              </View>
-              <Text style={[
-                s.sessionStatus,
-                session.status === "completed" ? s.statusCompleted :
-                session.status === "in_progress" ? s.statusProgress : s.statusExpired,
-              ]}>
-                {session.status === "completed" ? "Selesai" :
-                 session.status === "in_progress" ? "Berjalan" : "Kedaluwarsa"}
-              </Text>
-            </View>
-          ))
-        )}
+      <TouchableOpacity style={[S.scanBtn,!checkedIn&&S.btnDisabled]} onPress={()=>setScreen("scan")} disabled={!checkedIn}><Text style={S.scanBtnText}>Scan Checkpoint</Text></TouchableOpacity>
+      <View style={S.sec}><Text style={S.secTitle}>Riwayat Hari Ini</Text>
+        {sessions.length===0?<Text style={S.empty}>Belum ada sesi.</Text>:sessions.map(s=><View key={s.id} style={S.sCard}><View style={{flex:1}}><Text style={S.sName}>{s.checkpoints?.name||"CP"}</Text><Text style={S.sTime}>{new Date(s.started_at).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}{s.duration_minutes?` — ${s.duration_minutes}m`:""}</Text></View><Text style={[S.sStat,s.status==="completed"?S.sDone:s.status==="in_progress"?S.sProg:S.sExp]}>{s.status==="completed"?"Selesai":s.status==="in_progress"?"Berjalan":"Kedaluwarsa"}</Text></View>)}
       </View>
-
-      {/* Pending sync items */}
-      {pendingItems.length > 0 && (
-        <View style={s.sessionsSection}>
-          <Text style={s.sectionTitle}>Antrian Sinkronisasi</Text>
-          {pendingItems.map((item, idx) => (
-            <View key={idx} style={s.syncItem}>
-              <View style={s.syncInfo}>
-                <Text style={s.syncLabel}>{item.label}</Text>
-                <Text style={s.syncTime}>
-                  {new Date(item.createdAt).toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" })}
-                </Text>
-              </View>
-              <Text style={[s.syncStatus, item.synced ? s.syncedText : s.pendingText]}>
-                {item.synced ? "Tersinkron" : "Tersimpan lokal"}
-              </Text>
-            </View>
-          ))}
-        </View>
-      )}
-
-      <TouchableOpacity style={s.logoutBtn} onPress={signOut}>
-        <Text style={s.logoutText}>Keluar</Text>
-      </TouchableOpacity>
-
-      {/* Override Modal */}
+      {pendingItems.length>0 && <View style={S.sec}><Text style={S.secTitle}>Antrian Sinkronisasi</Text>{pendingItems.map((p,i)=><View key={i} style={[S.sCard,{flexDirection:"row",justifyContent:"space-between"}]}><View><Text style={{fontSize:13,fontWeight:"600"}}>{p.label}</Text><Text style={{fontSize:11,color:"#9ca3af"}}>{new Date(p.createdAt).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</Text></View><Text style={{fontSize:11,fontWeight:"600",paddingHorizontal:8,paddingVertical:3,borderRadius:6,color:p.synced?"#16a34a":"#d97706",backgroundColor:p.synced?"#f0fdf4":"#fef3c7"}}>{p.synced?"Tersinkron":"Tersimpan lokal"}</Text></View>)}</View>}
+      <TouchableOpacity style={S.logoutBtn} onPress={signOut}><Text style={S.logoutText}>Keluar</Text></TouchableOpacity>
       <Modal visible={showOverride} transparent animationType="fade">
-        <View style={s.modalOverlay}>
-          <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Di Luar Area Site</Text>
-            <Text style={s.modalText}>Berikan alasan untuk melanjutkan:</Text>
-            <TextInput
-              style={s.modalInput}
-              placeholder="Alasan (contoh: GPS tidak akurat)"
-              value={overrideReason}
-              onChangeText={setOverrideReason}
-              multiline
-            />
-            <View style={s.modalBtns}>
-              <TouchableOpacity style={s.modalCancel} onPress={() => { setShowOverride(false); setOverrideReason(""); }}>
-                <Text style={s.modalCancelText}>Batal</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={s.modalConfirm} onPress={handleOverrideSubmit}>
-                <Text style={s.modalConfirmText}>Lanjutkan</Text>
-              </TouchableOpacity>
-            </View>
+        <View style={S.modalOverlay}><View style={S.modalCard}>
+          <Text style={S.modalTitle}>Di Luar Area Site</Text><Text style={S.modalText}>Berikan alasan:</Text>
+          <TextInput style={S.modalInput} placeholder="GPS tidak akurat" value={overrideReason} onChangeText={setOverrideReason} multiline />
+          <View style={{flexDirection:"row",justifyContent:"flex-end",gap:8}}>
+            <TouchableOpacity onPress={()=>{setShowOverride(false);setOverrideReason("");}}><Text style={{color:"#6b7280",padding:10}}>Batal</Text></TouchableOpacity>
+            <TouchableOpacity style={{backgroundColor:"#2563eb",borderRadius:8,padding:10,paddingHorizontal:20}} onPress={handleOverride}><Text style={{color:"#fff",fontWeight:"600"}}>Lanjutkan</Text></TouchableOpacity>
           </View>
-        </View>
+        </View></View>
       </Modal>
     </ScrollView>
   );
 }
 
-const s = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#f3f4f6" },
-  content: { padding: 20, paddingTop: 60 },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { marginBottom: 24 },
-  headerRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
-  badge: {
-    backgroundColor: "#fef3c7", borderRadius: 12, paddingHorizontal: 10, paddingVertical: 4,
-  },
-  badgeText: { color: "#92400e", fontSize: 12, fontWeight: "600" },
-  greeting: { fontSize: 22, fontWeight: "bold", color: "#111827" },
-  site: { fontSize: 14, color: "#6b7280", marginTop: 4 },
-  statusCard: {
-    backgroundColor: "#fff", borderRadius: 12, padding: 20, marginBottom: 24,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08, shadowRadius: 4, elevation: 2,
-  },
-  statusRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 12 },
-  statusLabel: { fontSize: 14, color: "#6b7280" },
-  statusValue: { fontSize: 14, fontWeight: "600" },
-  statusIn: { color: "#16a34a" },
-  statusOut: { color: "#dc2626" },
-  progressRow: { flexDirection: "row", justifyContent: "space-between" },
-  progressValue: { fontSize: 14, fontWeight: "600", color: "#2563eb" },
-  mainBtn: {
-    borderRadius: 16, padding: 24, alignItems: "center", marginBottom: 12,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15, shadowRadius: 4, elevation: 4,
-  },
-  checkinBtn: { backgroundColor: "#16a34a" },
-  checkoutBtn: { backgroundColor: "#dc2626" },
-  btnDisabled: { opacity: 0.6 },
-  mainBtnText: { color: "#fff", fontSize: 20, fontWeight: "bold" },
-  scanBtn: {
-    backgroundColor: "#2563eb", borderRadius: 12, padding: 16, alignItems: "center",
-    marginBottom: 24, shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1, shadowRadius: 2, elevation: 2,
-  },
-  scanBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
-  sessionsSection: { marginBottom: 24 },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: "#111827", marginBottom: 12 },
-  emptyText: { color: "#9ca3af", fontSize: 14, textAlign: "center", paddingVertical: 20 },
-  sessionCard: {
-    backgroundColor: "#fff", borderRadius: 10, padding: 14, marginBottom: 8,
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-  },
-  sessionInfo: { flex: 1 },
-  sessionName: { fontSize: 14, fontWeight: "600", color: "#111827" },
-  sessionTime: { fontSize: 12, color: "#6b7280", marginTop: 2 },
-  sessionStatus: { fontSize: 12, fontWeight: "600", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  statusCompleted: { color: "#16a34a", backgroundColor: "#f0fdf4" },
-  statusProgress: { color: "#2563eb", backgroundColor: "#eff6ff" },
-  statusExpired: { color: "#dc2626", backgroundColor: "#fef2f2" },
-  logoutBtn: { padding: 14, alignItems: "center" },
-  logoutText: { color: "#6b7280", fontSize: 14 },
-  backAbsolute: { position: "absolute", top: 60, left: 20, zIndex: 10, padding: 8 },
-  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", padding: 24 },
-  modalCard: { backgroundColor: "#fff", borderRadius: 12, padding: 24, width: "100%" },
-  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 8 },
-  modalText: { fontSize: 14, color: "#6b7280", marginBottom: 12 },
-  modalInput: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 12, fontSize: 14, marginBottom: 16, minHeight: 80, textAlignVertical: "top" },
-  modalBtns: { flexDirection: "row", justifyContent: "flex-end", gap: 8 },
-  modalCancel: { padding: 10 },
-  modalCancelText: { color: "#6b7280", fontSize: 14 },
-  modalConfirm: { backgroundColor: "#2563eb", borderRadius: 8, padding: 10, paddingHorizontal: 20 },
-  modalConfirmText: { color: "#fff", fontSize: 14, fontWeight: "600" },
-  syncItem: {
-    backgroundColor: "#fff", borderRadius: 10, padding: 12, marginBottom: 6,
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-  },
-  syncInfo: { flex: 1 },
-  syncLabel: { fontSize: 13, fontWeight: "600", color: "#111827" },
-  syncTime: { fontSize: 11, color: "#9ca3af", marginTop: 2 },
-  syncStatus: { fontSize: 11, fontWeight: "600", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  syncedText: { color: "#16a34a", backgroundColor: "#f0fdf4" },
-  pendingText: { color: "#d97706", backgroundColor: "#fef3c7" },
+const S = StyleSheet.create({
+  container:{flex:1,backgroundColor:"#f3f4f6"},content:{padding:20,paddingTop:60},center:{flex:1,justifyContent:"center",alignItems:"center"},
+  headerRow:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24},
+  greeting:{fontSize:22,fontWeight:"bold",color:"#111827"},site:{fontSize:14,color:"#6b7280",marginTop:4},
+  badge:{backgroundColor:"#fef3c7",borderRadius:12,paddingHorizontal:10,paddingVertical:4},badgeText:{color:"#92400e",fontSize:12,fontWeight:"600"},
+  statusCard:{backgroundColor:"#fff",borderRadius:12,padding:20,marginBottom:24,elevation:2},
+  statusRow:{flexDirection:"row",justifyContent:"space-between",marginBottom:12},statusLabel:{fontSize:14,color:"#6b7280"},
+  statusValue:{fontSize:14,fontWeight:"600"},statusIn:{color:"#16a34a"},statusOut:{color:"#dc2626"},
+  progressValue:{fontSize:14,fontWeight:"600",color:"#2563eb"},
+  mainBtn:{borderRadius:16,padding:24,alignItems:"center",marginBottom:12,elevation:4},
+  checkinBtn:{backgroundColor:"#16a34a"},checkoutBtn:{backgroundColor:"#dc2626"},btnDisabled:{opacity:.6},
+  mainBtnText:{color:"#fff",fontSize:20,fontWeight:"bold"},
+  scanBtn:{backgroundColor:"#2563eb",borderRadius:12,padding:16,alignItems:"center",marginBottom:24,elevation:2},scanBtnText:{color:"#fff",fontSize:16,fontWeight:"600"},
+  sec:{marginBottom:24},secTitle:{fontSize:16,fontWeight:"600",color:"#111827",marginBottom:12},empty:{color:"#9ca3af",textAlign:"center",paddingVertical:20},
+  sCard:{backgroundColor:"#fff",borderRadius:10,padding:14,marginBottom:8,flexDirection:"row",justifyContent:"space-between",alignItems:"center"},
+  sName:{fontSize:14,fontWeight:"600",color:"#111827"},sTime:{fontSize:12,color:"#6b7280",marginTop:2},
+  sStat:{fontSize:12,fontWeight:"600",paddingHorizontal:8,paddingVertical:3,borderRadius:6},
+  sDone:{color:"#16a34a",backgroundColor:"#f0fdf4"},sProg:{color:"#2563eb",backgroundColor:"#eff6ff"},sExp:{color:"#dc2626",backgroundColor:"#fef2f2"},
+  logoutBtn:{padding:14,alignItems:"center"},logoutText:{color:"#6b7280"},
+  modalOverlay:{flex:1,justifyContent:"center",alignItems:"center",backgroundColor:"rgba(0,0,0,0.5)",padding:24},
+  modalCard:{backgroundColor:"#fff",borderRadius:12,padding:24,width:"100%"},
+  modalTitle:{fontSize:18,fontWeight:"bold",marginBottom:8},modalText:{fontSize:14,color:"#6b7280",marginBottom:12},
+  modalInput:{borderWidth:1,borderColor:"#d1d5db",borderRadius:8,padding:12,marginBottom:16,minHeight:80,textAlignVertical:"top"},
 });
