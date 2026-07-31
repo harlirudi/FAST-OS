@@ -21,8 +21,14 @@
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
-      "permissions": ["CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "NFC"],
-      "predictiveBackGestureEnabled": false
+      "permissions": [
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "NFC"
+      ],
+      "predictiveBackGestureEnabled": false,
+      "package": "com.harlirudi.facilityos"
     },
     "web": {
       "favicon": "./assets/favicon.png"
