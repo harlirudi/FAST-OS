@@ -6,9 +6,10 @@ import {
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system/legacy";
 import { useAuth } from "../contexts/AuthContext";
 import { getAttendanceStatus, submitAttendance } from "../lib/attendance";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseUrl } from "../lib/supabase";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
 import { getPendingCount, onPendingChange, getPendingItems, PendingItem } from "../lib/sync";
 import CheckpointScanScreen from "./CheckpointScanScreen";
@@ -56,11 +57,17 @@ export default function CleanerHomeScreen() {
       { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG });
     let url = `https://placehold.co/640x480?text=${Date.now()}`;
     try {
-      const blob = await fetch(compressed.uri).then(res => res.blob());
       const name = `${user?.id || "u"}/${Date.now()}.jpg`;
-      const { error } = await supabase.storage.from("attendance-photos").upload(name, blob,
-        { contentType: "image/jpeg", upsert: true });
-      if (!error) url = supabase.storage.from("attendance-photos").getPublicUrl(name).data.publicUrl;
+      const uploadRes = await FileSystem.uploadAsync(
+        `${supabaseUrl}/storage/v1/object/attendance-photos/${name}`,
+        compressed.uri,
+        { httpMethod: "POST", uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
+            "apikey": "sb_publishable_DM8GfA28S1QDr_tTT-zShg_UQ8ggNOb" } }
+      );
+      if (uploadRes.status === 200) {
+        url = `${supabaseUrl}/storage/v1/object/public/attendance-photos/${name}`;
+      }
     } catch {}
     return url;
   };

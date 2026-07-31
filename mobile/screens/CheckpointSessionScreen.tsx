@@ -5,9 +5,10 @@ import {
 } from "react-native";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
+import * as FileSystem from "expo-file-system/legacy";
 import { useAuth } from "../contexts/AuthContext";
 import { uploadSessionPhoto, completeSession } from "../lib/checkpoint";
-import { supabase } from "../lib/supabase";
+import { supabase, supabaseUrl } from "../lib/supabase";
 
 type Props = {
   sessionId: string;
@@ -28,11 +29,19 @@ export default function CheckpointSessionScreen({ sessionId, checkpointName, onC
       compress: 0.7, format: ImageManipulator.SaveFormat.JPEG,
     });
     try {
-      const blob = await fetch(compressed.uri).then(r => r.blob());
       const name = `${user?.id || "u"}/${Date.now()}.jpg`;
-      const { error } = await supabase.storage.from("attendance-photos").upload(name, blob,
-        { contentType: "image/jpeg", upsert: true });
-      if (!error) return supabase.storage.from("attendance-photos").getPublicUrl(name).data.publicUrl;
+      const session = await supabase.auth.getSession();
+      const token = session.data.session?.access_token || "";
+      const uploadRes = await FileSystem.uploadAsync(
+        `${supabaseUrl}/storage/v1/object/attendance-photos/${name}`,
+        compressed.uri,
+        { httpMethod: "POST", uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
+          headers: { "Authorization": `Bearer ${token}`,
+            "apikey": "sb_publishable_DM8GfA28S1QDr_tTT-zShg_UQ8ggNOb" } }
+      );
+      if (uploadRes.status === 200) {
+        return `${supabaseUrl}/storage/v1/object/public/attendance-photos/${name}`;
+      }
     } catch {}
     return `https://placehold.co/640x480?text=${Date.now()}`;
   };
