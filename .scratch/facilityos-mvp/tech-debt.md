@@ -24,14 +24,16 @@ Status: needs-triage
 | ✅ Sesi in_progress bisa diklik untuk melanjutkan |
 | ✅ Foto supervisor mobile tampil via Image component |
 | ✅ Foto web dashboard tampil di modal overlay |
+| ✅ Duplicated table components → useFilterableTable hook |
+| ✅ Shotgun surgery → SyncAction registry pattern |
 
 ## Belum difix
 
-### Refactor (rendah — post-MVP)
-| Item | Detail |
+### Refactor (selesai)
+| Item | Status |
 |------|--------|
-| Duplicated table components | AttendanceTable & CheckpointTable ~90% struktur sama |
-| Shotgun surgery | Tambah SyncAction = edit 4 file |
+| Duplicated table components | ✅ useFilterableTable hook |
+| Shotgun surgery (SyncAction) | ✅ registry pattern |
 
 ### Fitur (butuh infra — post-MVP)
 | Item | Kendala |
