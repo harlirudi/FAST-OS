@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/admin/data-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import type { ColumnDef } from "@tanstack/react-table";
 import { createClient } from "@/lib/supabase/client";
 import { Download } from "lucide-react";
@@ -22,6 +23,21 @@ type CheckpointRow = {
   duration: number | null;
   beforePhotoUrl: string | null;
   afterPhotoUrl: string | null;
+};
+
+const PhotoCell = ({ url }: { url: string | null }) => {
+  const [open, setOpen] = useState(false);
+  if (!url || url.includes("placehold")) return <span className="text-xs text-gray-400">-</span>;
+  return (
+    <>
+      <img src={url} alt="" className="h-16 w-20 cursor-pointer rounded border object-cover" onClick={() => setOpen(true)} />
+      <Dialog open={open} onOpenChange={setOpen}>
+        <DialogContent className="max-w-3xl">
+          <img src={url} alt="" className="w-full rounded" />
+        </DialogContent>
+      </Dialog>
+    </>
+  );
 };
 
 const columns: ColumnDef<CheckpointRow>[] = [
@@ -56,26 +72,12 @@ const columns: ColumnDef<CheckpointRow>[] = [
   {
     accessorKey: "beforePhotoUrl",
     header: "Foto Before",
-    cell: ({ row }) =>
-      row.original.beforePhotoUrl && !row.original.beforePhotoUrl.includes("placehold") ? (
-        <a href={row.original.beforePhotoUrl} target="_blank">
-          <img src={row.original.beforePhotoUrl} alt="Before" className="h-16 w-20 rounded object-cover border" />
-        </a>
-      ) : (
-        <span className="text-gray-400 text-xs">-</span>
-      ),
+    cell: ({ row }) => <PhotoCell url={row.original.beforePhotoUrl} />,
   },
   {
     accessorKey: "afterPhotoUrl",
     header: "Foto After",
-    cell: ({ row }) =>
-      row.original.afterPhotoUrl && !row.original.afterPhotoUrl.includes("placehold") ? (
-        <a href={row.original.afterPhotoUrl} target="_blank">
-          <img src={row.original.afterPhotoUrl} alt="After" className="h-16 w-20 rounded object-cover border" />
-        </a>
-      ) : (
-        <span className="text-gray-400 text-xs">-</span>
-      ),
+    cell: ({ row }) => <PhotoCell url={row.original.afterPhotoUrl} />,
   },
 ];
 
