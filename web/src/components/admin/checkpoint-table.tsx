@@ -57,9 +57,9 @@ const columns: ColumnDef<CheckpointRow>[] = [
     accessorKey: "beforePhotoUrl",
     header: "Foto Before",
     cell: ({ row }) =>
-      row.original.beforePhotoUrl ? (
-        <a href={row.original.beforePhotoUrl} target="_blank" className="text-blue-600 underline text-xs">
-          Lihat
+      row.original.beforePhotoUrl && !row.original.beforePhotoUrl.includes("placehold") ? (
+        <a href={row.original.beforePhotoUrl} target="_blank">
+          <img src={row.original.beforePhotoUrl} alt="Before" className="h-16 w-20 rounded object-cover border" />
         </a>
       ) : (
         <span className="text-gray-400 text-xs">-</span>
@@ -69,9 +69,9 @@ const columns: ColumnDef<CheckpointRow>[] = [
     accessorKey: "afterPhotoUrl",
     header: "Foto After",
     cell: ({ row }) =>
-      row.original.afterPhotoUrl ? (
-        <a href={row.original.afterPhotoUrl} target="_blank" className="text-green-600 underline text-xs">
-          Lihat
+      row.original.afterPhotoUrl && !row.original.afterPhotoUrl.includes("placehold") ? (
+        <a href={row.original.afterPhotoUrl} target="_blank">
+          <img src={row.original.afterPhotoUrl} alt="After" className="h-16 w-20 rounded object-cover border" />
         </a>
       ) : (
         <span className="text-gray-400 text-xs">-</span>
