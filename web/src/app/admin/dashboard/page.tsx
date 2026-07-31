@@ -1,3 +1,7 @@
+"use client";
+
+export const dynamic = "force-dynamic";
+
 import { createClient } from "@/lib/supabase/server";
 import { DashboardStats } from "@/components/admin/dashboard-stats";
 import { CompletionChart } from "@/components/admin/completion-chart";

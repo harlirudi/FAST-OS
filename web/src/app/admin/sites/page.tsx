@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
+
 import { useEffect, useState } from "react";
 import { DataTable } from "@/components/admin/data-table";
 import { Button } from "@/components/ui/button";
@@ -47,6 +50,8 @@ function EditDialog({ site }: { site: Site }) {
 }
 
 export default function SitesPage() {
+  // force-dynamic via file
+
   const [sites, setSites] = useState<Site[]>([]);
   const supabase = createClient();
 

@@ -1,5 +1,8 @@
 "use client";
 
+export const dynamic = "force-dynamic";
+
+
 import { useEffect, useState } from "react";
 import { DataTable } from "@/components/admin/data-table";
 import { FormSelect } from "@/components/admin/form-select";
