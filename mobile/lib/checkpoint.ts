@@ -21,11 +21,7 @@ export async function startSession(
   longitude: number
 ): Promise<{ success: boolean; message: string; sessionId?: string; checkpointName?: string }> {
   if (!isOnline()) {
-    await enqueue({
-      type: "checkpoint_start",
-      payload: { identifier, mode, latitude, longitude },
-      createdAt: new Date().toISOString(),
-    });
+    await enqueue("checkpoint_start", { identifier, mode, latitude, longitude });
     return { success: true, message: "Tersimpan lokal. Akan disinkron saat online.", sessionId: "local-" + Date.now(), checkpointName: identifier };
   }
 
@@ -60,11 +56,7 @@ export async function uploadSessionPhoto(
   photoUrl: string
 ): Promise<{ success: boolean; message: string }> {
   if (!isOnline()) {
-    await enqueue({
-      type: "checkpoint_photo",
-      payload: { sessionId, photoType, photoUrl },
-      createdAt: new Date().toISOString(),
-    });
+    await enqueue("checkpoint_photo", { sessionId, photoType, photoUrl });
     return { success: true, message: "Tersimpan lokal." };
   }
 
@@ -89,11 +81,7 @@ export async function completeSession(
   longitude: number
 ): Promise<{ success: boolean; message: string; duration?: number }> {
   if (!isOnline()) {
-    await enqueue({
-      type: "checkpoint_complete",
-      payload: { sessionId, photoUrl, latitude, longitude },
-      createdAt: new Date().toISOString(),
-    });
+    await enqueue("checkpoint_complete", { sessionId, photoUrl, latitude, longitude });
     return { success: true, message: "Tersimpan lokal. Akan disinkron saat online." };
   }
 

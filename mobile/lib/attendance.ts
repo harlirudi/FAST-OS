@@ -75,17 +75,9 @@ export async function submitAttendance(
   // Offline: simpan ke antrian
   if (!isOnline()) {
     if (type === "check_in") {
-      await enqueue({
-        type: "check_in",
-        payload: { latitude, longitude, photoUrl, reason: overrideReason },
-        createdAt: new Date().toISOString(),
-      });
+      await enqueue("check_in", { latitude, longitude, photoUrl, reason: overrideReason });
     } else {
-      await enqueue({
-        type: "check_out",
-        payload: { latitude, longitude, photoUrl },
-        createdAt: new Date().toISOString(),
-      });
+      await enqueue("check_out", { latitude, longitude, photoUrl });
     }
     return { success: true, message: "Tersimpan lokal. Akan disinkron saat online." };
   }
