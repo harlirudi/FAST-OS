@@ -30,7 +30,7 @@ const PhotoCell = ({ url }: { url: string | null }) => {
   if (!url || url.includes("placehold")) return <span className="text-xs text-gray-400">-</span>;
   return (
     <>
-      <img src={url} alt="" className="h-16 w-20 cursor-pointer rounded border object-cover" onClick={() => setOpen(true)} />
+      <span className="cursor-pointer text-xs text-blue-600 underline" onClick={() => setOpen(true)}>Lihat</span>
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="max-w-3xl">
           <img src={url} alt="" className="w-full rounded" />
