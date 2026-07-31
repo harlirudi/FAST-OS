@@ -8,6 +8,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useAuth } from "../contexts/AuthContext";
 import { getAttendanceStatus, submitAttendance, uploadPhoto } from "../lib/attendance";
+import { supabase } from "../lib/supabase";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
 import { getPendingCount, onPendingChange, getPendingItems, PendingItem } from "../lib/sync";
 import CheckpointScanScreen from "./CheckpointScanScreen";
@@ -82,9 +83,20 @@ export default function CleanerHomeScreen() {
       { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG }
     );
 
-    // Upload ke storage
-    const photoUrl = await uploadPhoto(compressed.uri, user?.id || "unknown");
-    const finalPhotoUrl = photoUrl || `https://placehold.co/640x480?text=Selfie-${Date.now()}`;
+    // Upload via fetch (lebih cepat dari base64)
+    let finalPhotoUrl = `https://placehold.co/640x480?text=Selfie-${Date.now()}`;
+    try {
+      const blob = await fetch(compressed.uri).then(r => r.blob());
+      const ext = "jpg";
+      const fileName = `${user?.id || "u"}/${Date.now()}.${ext}`;
+      const { error: upErr } = await supabase.storage
+        .from("attendance-photos")
+        .upload(fileName, blob, { contentType: "image/jpeg", upsert: true });
+      if (!upErr) {
+        const { data } = supabase.storage.from("attendance-photos").getPublicUrl(fileName);
+        finalPhotoUrl = data.publicUrl;
+      }
+    } catch {} // fallback ke placeholder
 
     const loc = location || (await getLocation());
     if (!loc) { setActionLoading(false); return; }
