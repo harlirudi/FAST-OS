@@ -3,8 +3,10 @@ import {
   View, Text, TouchableOpacity, StyleSheet, Image,
   ActivityIndicator, Alert, ScrollView,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
 import { useAuth } from "../contexts/AuthContext";
-import { uploadSessionPhoto, completeSession } from "../lib/checkpoint";
+import { uploadSessionPhoto, completeSession, uploadPhotoToStorage } from "../lib/checkpoint";
 
 type Props = {
   sessionId: string;
@@ -20,17 +22,34 @@ export default function CheckpointSessionScreen({ sessionId, checkpointName, onC
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState<"before" | "after" | "done">("before");
 
+  const compressAndUpload = async (uri: string): Promise<string | null> => {
+    const compressed = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: 1024 } }], {
+      compress: 0.7,
+      format: ImageManipulator.SaveFormat.JPEG,
+    });
+    return uploadPhotoToStorage(compressed.uri, user?.id || "unknown");
+  };
+
   const takePhoto = async (type: "before" | "after") => {
-    // Testing: skip camera, langsung set placeholder
-    if (type === "before") setBeforePhoto(`photo-before-${Date.now()}`);
-    else setAfterPhoto(`photo-after-${Date.now()}`);
+    const { status } = await ImagePicker.requestCameraPermissionsAsync();
+    if (status !== "granted") {
+      Alert.alert("Izin", "Izinkan akses kamera untuk mengambil foto.");
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
+    if (result.canceled || !result.assets?.[0]) return;
+
+    const uri = result.assets[0].uri;
+    if (type === "before") setBeforePhoto(uri);
+    else setAfterPhoto(uri);
   };
 
   const handleBeforePhoto = async () => {
     if (!beforePhoto) return;
     setLoading(true);
-    // Testing: skip upload, pakai placeholder
-    const url = `https://placehold.co/640x480?text=Before-${Date.now()}`;
+    const url = await compressAndUpload(beforePhoto);
+    if (!url) { Alert.alert("Error", "Gagal upload foto"); setLoading(false); return; }
     const res = await uploadSessionPhoto(sessionId, "before", url);
     if (res.success) {
       setStep("after");
@@ -43,8 +62,8 @@ export default function CheckpointSessionScreen({ sessionId, checkpointName, onC
   const handleComplete = async () => {
     if (!afterPhoto) return;
     setLoading(true);
-    // Testing: skip upload, pakai placeholder
-    const url = `https://placehold.co/640x480?text=After-${Date.now()}`;
+    const url = await compressAndUpload(afterPhoto);
+    if (!url) { Alert.alert("Error", "Gagal upload foto"); setLoading(false); return; }
     const res = await completeSession(sessionId, url, 0, 0);
     if (res.success) {
       Alert.alert("Selesai", `Sesi selesai (${res.duration} menit)`);
