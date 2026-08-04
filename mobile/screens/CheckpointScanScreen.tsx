@@ -81,7 +81,8 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
       Alert.alert("Berhasil", res.message);
       onSessionStarted(res.sessionId, res.checkpointName || "Checkpoint", mode);
     } else {
-      Alert.alert("Gagal", res.message);
+      const uidHint = mode === "nfc" ? `\n\nUID Tag: ${identifier}` : "";
+      Alert.alert("Gagal", res.message + uidHint);
     }
     setLoading(false);
   };
