@@ -182,3 +182,47 @@ export async function startInspection(
   if (!res.ok) return { success: false, message: data.error || "Gagal" };
   return { success: true, message: data.message, sessionId: data.session_id };
 }
+
+export async function pairNfcTagToCheckpoint(
+  checkpointId: string,
+  nfcTagId: string,
+  latitude: number,
+  longitude: number
+): Promise<{ success: boolean; message: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+
+  const res = await fetch(`${supabaseUrl}/functions/v1/pair-nfc`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session?.access_token}`,
+    },
+    body: JSON.stringify({
+      checkpoint_id: checkpointId,
+      nfc_tag_id: nfcTagId,
+      latitude,
+      longitude,
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok) return { success: false, message: data.error || "Gagal pairing" };
+  return { success: true, message: data.message };
+}
+
+export type PairingCheckpoint = {
+  id: string;
+  name: string;
+  nfc_tag_id: string | null;
+  latitude: number;
+  longitude: number;
+};
+
+export async function getCheckpointsForPairing(siteId: string): Promise<PairingCheckpoint[]> {
+  const { data } = await supabase
+    .from("checkpoints")
+    .select("id, name, nfc_tag_id, latitude, longitude")
+    .eq("site_id", siteId)
+    .order("display_order");
+  return (data || []) as PairingCheckpoint[];
+}

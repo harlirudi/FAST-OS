@@ -11,6 +11,7 @@ import {
 } from "../lib/supervisor";
 import { supabase } from "../lib/supabase";
 import CheckpointScanScreen from "./CheckpointScanScreen";
+import NfcPairingScreen from "./NfcPairingScreen";
 
 type Tab = "team" | "inspections" | "overrides" | "photos";
 
@@ -24,6 +25,7 @@ export default function SupervisorDashboardScreen() {
   const [lastPhotos, setLastPhotos] = useState<CheckpointInspection[]>([]);
   const [inspections, setInspections] = useState<CheckpointInspection[]>([]);
   const [scanMode, setScanMode] = useState(false);
+  const [pairingMode, setPairingMode] = useState(false);
   const [inspectNote, setInspectNote] = useState("");
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [pendingScan, setPendingScan] = useState<{ id: string; mode: "nfc" | "qr" } | null>(null);
@@ -67,6 +69,10 @@ export default function SupervisorDashboardScreen() {
       Alert.alert("Gagal", res.message);
     }
   };
+
+  if (pairingMode) {
+    return <NfcPairingScreen onDone={() => { setPairingMode(false); loadData(); }} />;
+  }
 
   if (scanMode) {
     return (
@@ -155,6 +161,9 @@ export default function SupervisorDashboardScreen() {
             <TouchableOpacity style={styles.inspectBtn} onPress={() => setScanMode(true)}>
               <Text style={styles.inspectBtnText}>Inspeksi Checkpoint</Text>
             </TouchableOpacity>
+            <TouchableOpacity style={styles.pairBtn} onPress={() => setPairingMode(true)}>
+              <Text style={styles.inspectBtnText}>Pasang NFC Tag</Text>
+            </TouchableOpacity>
             {inspections.map((ins) => (
               <View key={ins.id} style={styles.card}>
                 <Text style={styles.cardName}>{ins.checkpointName}</Text>
@@ -217,6 +226,7 @@ const styles = StyleSheet.create({
   tabActiveText: { color: "#2563eb", fontWeight: "600" },
   content: { flex: 1, padding: 20 },
   inspectBtn: { backgroundColor: "#2563eb", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
+  pairBtn: { backgroundColor: "#059669", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   inspectBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   card: { backgroundColor: "#fff", borderRadius: 10, padding: 14, marginBottom: 8 },
   cardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
