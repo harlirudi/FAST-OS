@@ -1,5 +1,6 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getUserFromToken, ok, err } from "../_shared/auth.ts";
+import { haversineDistance } from "../_shared/geo.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -68,6 +69,18 @@ Deno.serve(async (req) => {
 
     if (checkpoint.site_id !== dbUser.site_id) {
       return err("Checkpoint ini bukan di site Anda", 400);
+    }
+
+    // Validasi GPS: harus dalam radius 50m dari checkpoint
+    const distanceToCheckpoint = haversineDistance(
+      latitude, longitude,
+      checkpoint.latitude, checkpoint.longitude
+    );
+    if (distanceToCheckpoint > 50) {
+      return err(
+        `Anda berada ${Math.round(distanceToCheckpoint)}m dari checkpoint ini (maks 50m)`,
+        400
+      );
     }
 
     // Buat sesi baru
