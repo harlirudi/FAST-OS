@@ -52,3 +52,14 @@ export async function pairNfcTag(checkpointId: string, formData: FormData) {
   revalidatePath("/admin/nfc");
   redirect("/admin/nfc");
 }
+
+export async function refreshCheckpointQr(checkpointId: string) {
+  "use server";
+  const supabase = await createClient();
+  const random = Math.random().toString(36).slice(2, 10);
+  await supabase
+    .from("checkpoints")
+    .update({ qr_code_hash: `qr_${Date.now()}_${random}` })
+    .eq("id", checkpointId);
+  revalidatePath("/admin/checkpoints");
+}

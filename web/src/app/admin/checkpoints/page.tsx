@@ -11,7 +11,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
-import { createCheckpoint, updateCheckpoint, deleteCheckpoint } from "@/lib/supabase/checkpoint-actions";
+import { createCheckpoint, updateCheckpoint, deleteCheckpoint, refreshCheckpointQr } from "@/lib/supabase/checkpoint-actions";
 import { Pencil, Trash2, Plus, QrCode } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -41,7 +41,19 @@ function QrDialog({ checkpoint }: { checkpoint: Checkpoint }) {
             <div className="flex gap-2">
               <a href={qrUrl} download={`qr-${hash}.png`} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Unduh</a>
               <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100">Cetak</a>
+              <form
+                action={async () => {
+                  if (confirm("Refresh QR? QR lama di toilet harus dicetak ulang dan diganti.")) {
+                    await refreshCheckpointQr(checkpoint.id);
+                    setOpen(false);
+                    window.location.reload();
+                  }
+                }}
+              >
+                <button type="submit" className="rounded-lg bg-red-600 px-4 py-2 text-sm text-white hover:bg-red-700">Refresh QR</button>
+              </form>
             </div>
+            <p className="text-xs text-amber-600">Refresh QR = QR lama mati. Cetak & ganti QR fisik di toilet.</p>
           </div>
         ) : (
           <p className="py-4 text-center text-sm text-gray-400">Belum ada QR hash — pasang NFC tag dulu atau buat QR hash secara manual.</p>
