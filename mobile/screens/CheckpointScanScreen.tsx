@@ -6,6 +6,7 @@ import {
 import * as Location from "expo-location";
 import { CameraView, useCameraPermissions } from "expo-camera";
 import { startSession } from "../lib/checkpoint";
+import { isNfcSupported, isNfcEnabled, readNfcTag, startNfcSession, stopNfcSession } from "../lib/nfc";
 
 export default function CheckpointScanScreen({ onSessionStarted, inspectionMode }: {
   onSessionStarted: (sessionId: string, checkpointName: string, mode: "nfc" | "qr") => void;
@@ -16,10 +17,44 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
   const [permission, requestPermission] = useCameraPermissions();
   const [nfcInput, setNfcInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [nfcReady, setNfcReady] = useState(false);
+  const [nfcUnsupported, setNfcUnsupported] = useState(false);
+  const [listening, setListening] = useState(false);
 
   useEffect(() => {
-    setMode("qr");
+    (async () => {
+      const supported = await isNfcSupported().catch(() => false);
+      if (!supported) {
+        setNfcUnsupported(true);
+        setMode("qr");
+        return;
+      }
+      const enabled = await isNfcEnabled().catch(() => false);
+      if (!enabled) {
+        Alert.alert("NFC Mati", "Aktifkan NFC di Settings Android.");
+        setMode("qr");
+        return;
+      }
+      await startNfcSession().catch(() => {});
+      setNfcReady(true);
+    })();
+    return () => { stopNfcSession().catch(() => {}); };
   }, []);
+
+  const listenNfc = async () => {
+    if (!nfcReady || listening) return;
+    setListening(true);
+    try {
+      const result = await readNfcTag();
+      if (result.success && result.tagId) {
+        handleScan(result.tagId);
+      } else {
+        Alert.alert("NFC", result.error || "Coba lagi");
+      }
+    } finally {
+      setListening(false);
+    }
+  };
 
   const handleScan = async (identifier: string) => {
     setLoading(true);
@@ -30,7 +65,6 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
     });
 
     if (inspectionMode) {
-      // Jangan panggil API — supervisor dashboard handle di modal
       onSessionStarted(identifier, identifier, mode);
       setLoading(false);
       return;
@@ -61,10 +95,6 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
     handleScan(nfcInput.trim());
   };
 
-  const handleSwitchToNfc = () => {
-    setMode("nfc");
-  };
-
   if (loading) {
     return (
       <View style={styles.center}>
@@ -79,20 +109,14 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
       <Text style={styles.title}>Scan Checkpoint</Text>
 
       <View style={styles.modeRow}>
-        <TouchableOpacity
-          style={[styles.modeBtn, mode === "nfc" && styles.modeActive]}
-          onPress={handleSwitchToNfc}
-        >
+        <TouchableOpacity style={[styles.modeBtn, mode === "nfc" && styles.modeActive]} onPress={() => setMode("nfc")}>
           <Text style={[styles.modeText, mode === "nfc" && styles.modeActiveText]}>NFC</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          style={[styles.modeBtn, mode === "qr" && styles.modeActive]}
-          onPress={async () => {
-            if (!permission?.granted) await requestPermission();
-            setMode("qr");
-            setScanning(true);
-          }}
-        >
+        <TouchableOpacity style={[styles.modeBtn, mode === "qr" && styles.modeActive]} onPress={async () => {
+          if (!permission?.granted) await requestPermission();
+          setMode("qr");
+          setScanning(true);
+        }}>
           <Text style={[styles.modeText, mode === "qr" && styles.modeActiveText]}>QR Code</Text>
         </TouchableOpacity>
       </View>
@@ -100,10 +124,20 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
       {mode === "nfc" && (
         <View style={styles.nfcContainer}>
           <Text style={styles.nfcHint}>
-            NFC hanya tersedia di development build, bukan Expo Go. Input NFC Tag ID manual di sini.
+            {nfcUnsupported
+              ? "Perangkat tidak mendukung NFC. Input manual:"
+              : nfcReady
+                ? "Tempelkan NFC tag ke belakang HP"
+                : "Menyiapkan NFC..."}
           </Text>
+          {nfcReady && (
+            <TouchableOpacity style={styles.scanBtn} onPress={listenNfc} disabled={listening}>
+              <Text style={styles.scanBtnText}>{listening ? "Menunggu tag..." : "Tap NFC Tag"}</Text>
+            </TouchableOpacity>
+          )}
+          <Text style={styles.nfcManualLabel}>Atau input manual:</Text>
           <TextInput style={styles.input} placeholder="Masukkan NFC Tag ID" value={nfcInput} onChangeText={setNfcInput} autoCapitalize="none" />
-          <TouchableOpacity style={styles.scanBtn} onPress={handleNfcSubmit}>
+          <TouchableOpacity style={[styles.scanBtn, { backgroundColor: "#6b7280" }]} onPress={handleNfcSubmit}>
             <Text style={styles.scanBtnText}>Scan NFC</Text>
           </TouchableOpacity>
         </View>
@@ -111,11 +145,7 @@ export default function CheckpointScanScreen({ onSessionStarted, inspectionMode 
 
       {mode === "qr" && scanning && permission?.granted && (
         <View style={styles.qrContainer}>
-          <CameraView
-            style={styles.qrScanner}
-            barcodeScannerSettings={{ barcodeTypes: ["qr"] }}
-            onBarcodeScanned={handleBarCodeScanned}
-          />
+          <CameraView style={styles.qrScanner} barcodeScannerSettings={{ barcodeTypes: ["qr"] }} onBarcodeScanned={handleBarCodeScanned} />
           <Text style={styles.qrHint}>Arahkan kamera ke QR Code checkpoint</Text>
           <TouchableOpacity style={styles.cancelBtn} onPress={() => setScanning(false)}>
             <Text style={styles.cancelText}>Batal</Text>
@@ -150,6 +180,7 @@ const styles = StyleSheet.create({
   modeActiveText: { color: "#fff" },
   nfcContainer: { alignItems: "center" },
   nfcHint: { fontSize: 13, color: "#6b7280", textAlign: "center", marginBottom: 16 },
+  nfcManualLabel: { fontSize: 12, color: "#9ca3af", marginTop: 16, marginBottom: 8 },
   input: { borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8, padding: 14, fontSize: 16, width: "100%", marginBottom: 16, textAlign: "center" },
   scanBtn: { backgroundColor: "#2563eb", borderRadius: 10, paddingVertical: 14, paddingHorizontal: 32 },
   scanBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
