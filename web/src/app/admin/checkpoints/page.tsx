@@ -61,6 +61,8 @@ export default function CheckpointsPage() {
     { accessorKey: "name", header: "Nama Checkpoint" },
     { accessorKey: "display_order", header: "Urutan" },
     { accessorKey: "nfc_tag_id", header: "NFC Tag", cell: ({ row }) => row.original.nfc_tag_id || "Belum dipasang" },
+    { accessorKey: "latitude", header: "Latitude", cell: ({ row }) => row.original.latitude.toFixed(6) },
+    { accessorKey: "longitude", header: "Longitude", cell: ({ row }) => row.original.longitude.toFixed(6) },
     {
       id: "actions", header: "Aksi",
       cell: ({ row }) => (
