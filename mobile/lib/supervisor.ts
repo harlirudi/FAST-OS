@@ -214,6 +214,7 @@ export type PairingCheckpoint = {
   id: string;
   name: string;
   nfc_tag_id: string | null;
+  qr_code_hash: string | null;
   latitude: number;
   longitude: number;
 };
@@ -221,7 +222,7 @@ export type PairingCheckpoint = {
 export async function getCheckpointsForPairing(siteId: string): Promise<PairingCheckpoint[]> {
   const { data } = await supabase
     .from("checkpoints")
-    .select("id, name, nfc_tag_id, latitude, longitude")
+    .select("id, name, nfc_tag_id, qr_code_hash, latitude, longitude")
     .eq("site_id", siteId)
     .order("display_order");
   return (data || []) as PairingCheckpoint[];
