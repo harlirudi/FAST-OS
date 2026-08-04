@@ -12,7 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { createCheckpoint, updateCheckpoint, deleteCheckpoint } from "@/lib/supabase/checkpoint-actions";
-import { Pencil, Trash2, Plus } from "lucide-react";
+import { Pencil, Trash2, Plus, QrCode } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 type Checkpoint = {
@@ -22,6 +22,34 @@ type Checkpoint = {
 };
 
 type Site = { id: string; name: string };
+
+function QrDialog({ checkpoint }: { checkpoint: Checkpoint }) {
+  const [open, setOpen] = useState(false);
+  const hash = checkpoint.qr_code_hash || "";
+  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(hash)}`;
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
+        <QrCode className="h-3 w-3" />
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>QR — {checkpoint.name}</DialogTitle></DialogHeader>
+        {hash ? (
+          <div className="flex flex-col items-center gap-3 py-4">
+            <img src={qrUrl} alt={`QR ${checkpoint.name}`} className="h-64 w-64 rounded border" />
+            <p className="text-xs text-gray-500 break-all">Hash: {hash}</p>
+            <div className="flex gap-2">
+              <a href={qrUrl} download={`qr-${hash}.png`} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Unduh</a>
+              <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100">Cetak</a>
+            </div>
+          </div>
+        ) : (
+          <p className="py-4 text-center text-sm text-gray-400">Belum ada QR hash — pasang NFC tag dulu atau buat QR hash secara manual.</p>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 function EditDialog({ checkpoint }: { checkpoint: Checkpoint }) {
   return (
@@ -63,6 +91,10 @@ export default function CheckpointsPage() {
     { accessorKey: "nfc_tag_id", header: "NFC Tag", cell: ({ row }) => row.original.nfc_tag_id || "Belum dipasang" },
     { accessorKey: "latitude", header: "Latitude", cell: ({ row }) => row.original.latitude.toFixed(6) },
     { accessorKey: "longitude", header: "Longitude", cell: ({ row }) => row.original.longitude.toFixed(6) },
+    {
+      id: "qr", header: "QR",
+      cell: ({ row }) => <QrDialog checkpoint={row.original} />,
+    },
     {
       id: "actions", header: "Aksi",
       cell: ({ row }) => (
