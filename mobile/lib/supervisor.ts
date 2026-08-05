@@ -227,3 +227,21 @@ export async function getCheckpointsForPairing(siteId: string): Promise<PairingC
     .order("display_order");
   return (data || []) as PairingCheckpoint[];
 }
+
+export async function updateSiteLocation(
+  latitude: number,
+  longitude: number
+): Promise<{ success: boolean; message: string }> {
+  const { data: { session } } = await supabase.auth.getSession();
+  const res = await fetch(`${supabaseUrl}/functions/v1/update-site-location`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${session?.access_token}`,
+    },
+    body: JSON.stringify({ latitude, longitude }),
+  });
+  const data = await res.json();
+  if (!res.ok) return { success: false, message: data.error || "Gagal update lokasi" };
+  return { success: true, message: data.message };
+}

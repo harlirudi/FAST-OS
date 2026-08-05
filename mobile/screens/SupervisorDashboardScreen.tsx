@@ -13,6 +13,7 @@ import { supabase } from "../lib/supabase";
 import CheckpointScanScreen from "./CheckpointScanScreen";
 import NfcPairingScreen from "./NfcPairingScreen";
 import QrBackupScreen from "./QrBackupScreen";
+import SetSiteLocationScreen from "./SetSiteLocationScreen";
 
 type Tab = "team" | "inspections" | "overrides" | "photos";
 
@@ -28,6 +29,7 @@ export default function SupervisorDashboardScreen() {
   const [scanMode, setScanMode] = useState(false);
   const [pairingMode, setPairingMode] = useState(false);
   const [qrBackupMode, setQrBackupMode] = useState(false);
+  const [setSiteLocationMode, setSetSiteLocationMode] = useState(false);
   const [inspectNote, setInspectNote] = useState("");
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [pendingScan, setPendingScan] = useState<{ id: string; mode: "nfc" | "qr" } | null>(null);
@@ -80,6 +82,10 @@ export default function SupervisorDashboardScreen() {
     return <QrBackupScreen onDone={() => setQrBackupMode(false)} />;
   }
 
+  if (setSiteLocationMode) {
+    return <SetSiteLocationScreen onDone={() => setSetSiteLocationMode(false)} />;
+  }
+
   if (scanMode) {
     return (
       <View style={{ flex: 1 }}>
@@ -125,9 +131,14 @@ export default function SupervisorDashboardScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Dashboard Supervisor</Text>
-        <TouchableOpacity onPress={signOut}>
-          <Text style={styles.logoutBtn}>Keluar</Text>
-        </TouchableOpacity>
+        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
+          <TouchableOpacity onPress={() => setSetSiteLocationMode(true)}>
+            <Text style={styles.siteLocBtn}>Lokasi Site</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={signOut}>
+            <Text style={styles.logoutBtn}>Keluar</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Tabs */}
@@ -228,6 +239,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 60, backgroundColor: "#fff" },
   title: { fontSize: 20, fontWeight: "bold", color: "#111827" },
   logoutBtn: { color: "#dc2626", fontSize: 14 },
+  siteLocBtn: { color: "#2563eb", fontSize: 14, fontWeight: "600" },
   tabs: { flexDirection: "row", backgroundColor: "#fff", paddingHorizontal: 20, paddingBottom: 4 },
   tab: { flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabActive: { borderBottomColor: "#2563eb" },
