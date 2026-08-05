@@ -6,10 +6,12 @@ import { redirect } from "next/navigation";
 
 export async function createSite(formData: FormData) {
   const supabase = await createClient();
+  const latRaw = formData.get("latitude") as string;
+  const lngRaw = formData.get("longitude") as string;
   await supabase.from("sites").insert({
     name: formData.get("name") as string,
-    latitude: parseFloat(formData.get("latitude") as string),
-    longitude: parseFloat(formData.get("longitude") as string),
+    latitude: latRaw ? parseFloat(latRaw) : null,
+    longitude: lngRaw ? parseFloat(lngRaw) : null,
     radius_meters: parseInt(formData.get("radius_meters") as string) || 50,
   });
   revalidatePath("/admin/sites");
@@ -18,12 +20,14 @@ export async function createSite(formData: FormData) {
 
 export async function updateSite(id: string, formData: FormData) {
   const supabase = await createClient();
+  const latRaw = formData.get("latitude") as string;
+  const lngRaw = formData.get("longitude") as string;
   await supabase
     .from("sites")
     .update({
       name: formData.get("name") as string,
-      latitude: parseFloat(formData.get("latitude") as string),
-      longitude: parseFloat(formData.get("longitude") as string),
+      latitude: latRaw ? parseFloat(latRaw) : null,
+      longitude: lngRaw ? parseFloat(lngRaw) : null,
       radius_meters: parseInt(formData.get("radius_meters") as string) || 50,
     })
     .eq("id", id);

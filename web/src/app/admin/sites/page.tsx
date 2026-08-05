@@ -23,8 +23,8 @@ import type { ColumnDef } from "@tanstack/react-table";
 type Site = {
   id: string;
   name: string;
-  latitude: number;
-  longitude: number;
+  latitude: number | null;
+  longitude: number | null;
   radius_meters: number;
   created_at: string;
 };
@@ -39,8 +39,8 @@ function EditDialog({ site }: { site: Site }) {
         <DialogHeader><DialogTitle>Edit Site</DialogTitle></DialogHeader>
         <form action={updateSite.bind(null, site.id)} className="space-y-3">
           <div><Label>Nama</Label><Input name="name" defaultValue={site.name} required /></div>
-          <div><Label>Latitude</Label><Input name="latitude" type="number" step="any" defaultValue={site.latitude} required /></div>
-          <div><Label>Longitude</Label><Input name="longitude" type="number" step="any" defaultValue={site.longitude} required /></div>
+          <div><Label>Latitude (opsional)</Label><Input name="latitude" type="number" step="any" defaultValue={site.latitude ?? ""} /></div>
+          <div><Label>Longitude (opsional)</Label><Input name="longitude" type="number" step="any" defaultValue={site.longitude ?? ""} /></div>
           <div><Label>Radius (meter)</Label><Input name="radius_meters" type="number" defaultValue={site.radius_meters} /></div>
           <Button type="submit">Simpan</Button>
         </form>
@@ -61,8 +61,8 @@ export default function SitesPage() {
 
   const columns: ColumnDef<Site>[] = [
     { accessorKey: "name", header: "Nama" },
-    { accessorKey: "latitude", header: "Latitude", cell: ({ row }) => row.original.latitude.toFixed(6) },
-    { accessorKey: "longitude", header: "Longitude", cell: ({ row }) => row.original.longitude.toFixed(6) },
+    { accessorKey: "latitude", header: "Latitude", cell: ({ row }) => row.original.latitude != null ? row.original.latitude.toFixed(6) : "-" },
+    { accessorKey: "longitude", header: "Longitude", cell: ({ row }) => row.original.longitude != null ? row.original.longitude.toFixed(6) : "-" },
     { accessorKey: "radius_meters", header: "Radius (m)" },
     {
       id: "actions", header: "Aksi",
@@ -89,9 +89,10 @@ export default function SitesPage() {
             <DialogHeader><DialogTitle>Tambah Site Baru</DialogTitle></DialogHeader>
             <form action={createSite} className="space-y-3">
               <div><Label>Nama</Label><Input name="name" placeholder="Gedung Utama" required /></div>
-              <div><Label>Latitude</Label><Input name="latitude" type="number" step="any" placeholder="-6.2088" required /></div>
-              <div><Label>Longitude</Label><Input name="longitude" type="number" step="any" placeholder="106.8456" required /></div>
+              <div><Label>Latitude (opsional)</Label><Input name="latitude" type="number" step="any" placeholder="-6.2088" /></div>
+              <div><Label>Longitude (opsional)</Label><Input name="longitude" type="number" step="any" placeholder="106.8456" /></div>
               <div><Label>Radius (meter)</Label><Input name="radius_meters" type="number" defaultValue={50} /></div>
+              <p className="text-xs text-gray-500">Kosongkan koordinat — supervisor bisa set via GPS di mobile app.</p>
               <Button type="submit">Simpan</Button>
             </form>
           </DialogContent>
