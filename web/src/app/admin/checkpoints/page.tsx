@@ -17,7 +17,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 
 type Checkpoint = {
   id: string; site_id: string; name: string; nfc_tag_id: string | null;
-  qr_code_hash: string | null; display_order: number; latitude: number; longitude: number;
+  qr_code_hash: string | null; qr_generation: number | null; display_order: number; latitude: number; longitude: number;
   sites?: { name: string };
 };
 
@@ -38,6 +38,7 @@ function QrDialog({ checkpoint }: { checkpoint: Checkpoint }) {
           <div className="flex flex-col items-center gap-3 py-4">
             <img src={qrUrl} alt={`QR ${checkpoint.name}`} className="h-64 w-64 rounded border" />
             <p className="text-xs text-gray-500 break-all">Hash: {hash}</p>
+            <p className="text-xs text-gray-500">Generasi: v{checkpoint.qr_generation ?? 1}</p>
             <div className="flex gap-2">
               <a href={qrUrl} download={`qr-${hash}.png`} className="rounded-lg bg-blue-600 px-4 py-2 text-sm text-white hover:bg-blue-700">Unduh</a>
               <a href={qrUrl} target="_blank" rel="noopener noreferrer" className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100">Cetak</a>
@@ -106,6 +107,11 @@ export default function CheckpointsPage() {
     {
       id: "qr", header: "QR",
       cell: ({ row }) => <QrDialog checkpoint={row.original} />,
+    },
+    {
+      accessorKey: "qr_generation",
+      header: "Gen",
+      cell: ({ row }) => row.original.qr_generation ?? 1,
     },
     {
       id: "actions", header: "Aksi",

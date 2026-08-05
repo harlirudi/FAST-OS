@@ -56,10 +56,24 @@ export async function pairNfcTag(checkpointId: string, formData: FormData) {
 export async function refreshCheckpointQr(checkpointId: string) {
   "use server";
   const supabase = await createClient();
-  const random = Math.random().toString(36).slice(2, 10);
+
+  // Ambil checkpoint: NFC tag (untuk prefix) + generasi saat ini
+  const { data: cp } = await supabase
+    .from("checkpoints")
+    .select("nfc_tag_id, qr_generation")
+    .eq("id", checkpointId)
+    .single();
+
+  const tagPrefix = (cp?.nfc_tag_id || "0000").replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toLowerCase() || "0000";
+  const generation = (cp?.qr_generation || 1) + 1;
+  const random = Math.random().toString(36).slice(2, 8);
+
   await supabase
     .from("checkpoints")
-    .update({ qr_code_hash: `qr_${Date.now()}_${random}` })
+    .update({
+      qr_code_hash: `qr_${tagPrefix}_v${generation}_${random}`,
+      qr_generation: generation,
+    })
     .eq("id", checkpointId);
   revalidatePath("/admin/checkpoints");
 }

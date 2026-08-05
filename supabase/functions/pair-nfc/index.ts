@@ -62,13 +62,16 @@ Deno.serve(async (req) => {
   }
 
   // Update: pasang tag + koordinat dari GPS supervisor
+  const tagPrefix = nfc_tag_id.replace(/[^A-Za-z0-9]/g, "").slice(0, 4).toLowerCase() || "0000";
+  const random = Math.random().toString(36).slice(2, 8);
   const { error: updateErr } = await supabase
     .from("checkpoints")
     .update({
       nfc_tag_id,
       latitude,
       longitude,
-      qr_code_hash: `qr_${nfc_tag_id.toLowerCase()}`,
+      qr_code_hash: `qr_${tagPrefix}_v1_${random}`,
+      qr_generation: 1,
     })
     .eq("id", checkpoint_id);
 
