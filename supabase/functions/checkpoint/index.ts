@@ -56,15 +56,45 @@ Deno.serve(async (req) => {
 
     if (!lastCheckIn) return err("Anda harus check-in terlebih dahulu", 400);
 
-    // Cari checkpoint by NFC atau QR
-    let query = supabase.from("checkpoints").select("id, name, site_id, latitude, longitude");
-    if (nfc_tag_id) {
-      query = query.eq("nfc_tag_id", nfc_tag_id);
+    // Cari checkpoint by NFC, QR, atau dynamic token (dy_<id>_<unix>)
+    let checkpoint: { id: string; name: string; site_id: string; latitude: number; longitude: number } | null = null;
+
+    if (qr_code_hash && qr_code_hash.startsWith("dy_")) {
+      // Dynamic token dari QR backup supervisor
+      const parts = qr_code_hash.split("_");
+      if (parts.length < 3) return err("Token QR tidak valid", 400);
+      const checkpointId = parts[1];
+      const issuedAt = parseInt(parts[2], 10);
+      if (isNaN(issuedAt)) return err("Token QR tidak valid", 400);
+
+      const nowSec = Math.floor(Date.now() / 1000);
+      const age = nowSec - issuedAt;
+      if (age < 0 || age > 300) {
+        return err("QR kedaluwarsa — minta supervisor menampilkan QR baru", 400);
+      }
+
+      const { data: cp } = await supabase
+        .from("checkpoints")
+        .select("id, name, site_id, latitude, longitude")
+        .eq("id", checkpointId)
+        .single();
+      checkpoint = cp || null;
+    } else if (nfc_tag_id) {
+      const { data: cp } = await supabase
+        .from("checkpoints")
+        .select("id, name, site_id, latitude, longitude")
+        .eq("nfc_tag_id", nfc_tag_id)
+        .single();
+      checkpoint = cp || null;
     } else {
-      query = query.eq("qr_code_hash", qr_code_hash);
+      const { data: cp } = await supabase
+        .from("checkpoints")
+        .select("id, name, site_id, latitude, longitude")
+        .eq("qr_code_hash", qr_code_hash)
+        .single();
+      checkpoint = cp || null;
     }
 
-    const { data: checkpoint } = await query.single();
     if (!checkpoint) return err("Checkpoint tidak ditemukan", 404);
 
     if (checkpoint.site_id !== dbUser.site_id) {

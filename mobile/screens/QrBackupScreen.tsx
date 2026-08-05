@@ -7,10 +7,19 @@ import QRCode from "react-native-qrcode-svg";
 import { getCheckpointsForPairing, PairingCheckpoint } from "../lib/supervisor";
 import { supabase } from "../lib/supabase";
 
+const VALIDITY_SECONDS = 300; // 5 menit
+const REFRESH_EVERY_SECONDS = 240; // refresh 4 menit sebelum expire
+
+function buildToken(checkpointId: string): string {
+  return `dy_${checkpointId}_${Math.floor(Date.now() / 1000)}`;
+}
+
 export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
   const [checkpoints, setCheckpoints] = useState<PairingCheckpoint[]>([]);
   const [selected, setSelected] = useState<PairingCheckpoint | null>(null);
   const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState("");
+  const [secondsLeft, setSecondsLeft] = useState(VALIDITY_SECONDS);
 
   useEffect(() => {
     (async () => {
@@ -25,12 +34,37 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
     })();
   }, []);
 
+  // Saat checkpoint dipilih: buat token + mulai countdown + auto-refresh
+  useEffect(() => {
+    if (!selected?.id) return;
+    setToken(buildToken(selected.id));
+    setSecondsLeft(VALIDITY_SECONDS);
+
+    const countdown = setInterval(() => {
+      setSecondsLeft((s) => {
+        if (s <= 1) {
+          // Expire: generate token baru
+          setToken(buildToken(selected.id));
+          return VALIDITY_SECONDS;
+        }
+        return s - 1;
+      });
+    }, 1000);
+
+    const autoRefresh = setInterval(() => {
+      setToken(buildToken(selected.id));
+      setSecondsLeft(VALIDITY_SECONDS);
+    }, REFRESH_EVERY_SECONDS * 1000);
+
+    return () => { clearInterval(countdown); clearInterval(autoRefresh); };
+  }, [selected?.id]);
+
   if (loading) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
   }
 
   if (selected) {
-    const qrValue = selected.qr_code_hash || `qr_${Date.now()}`;
+    const expired = secondsLeft <= 0;
     return (
       <View style={styles.container}>
         <View style={styles.header}>
@@ -40,17 +74,18 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
           <TouchableOpacity onPress={onDone}><Text style={styles.cancel}>Tutup</Text></TouchableOpacity>
         </View>
         <Text style={styles.title}>{selected.name}</Text>
-        <Text style={styles.sub}>Cleaner bisa scan QR ini sebagai fallback</Text>
+        <Text style={styles.sub}>QR dinamis — berlaku 5 menit, anti screenshot</Text>
         <View style={styles.qrBox}>
-          {selected.qr_code_hash ? (
-            <QRCode value={qrValue} size={260} />
-          ) : (
-            <Text style={styles.noQr}>Checkpoint ini belum punya QR hash</Text>
-          )}
+          <QRCode value={token} size={260} />
         </View>
-        {selected.qr_code_hash && (
-          <Text style={styles.hash}>Hash: {selected.qr_code_hash}</Text>
-        )}
+        <View style={[styles.timer, expired && styles.timerExpired]}>
+          <Text style={styles.timerText}>
+            {expired ? "Kedaluwarsa — menunggu QR baru..." : `Berlaku ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`}
+          </Text>
+        </View>
+        <TouchableOpacity style={styles.refreshBtn} onPress={() => { setToken(buildToken(selected.id)); setSecondsLeft(VALIDITY_SECONDS); }}>
+          <Text style={styles.refreshText}>Refresh QR Sekarang</Text>
+        </TouchableOpacity>
         <Text style={styles.tip}>Naikkan kecerahan layar agar mudah di-scan</Text>
       </View>
     );
@@ -62,18 +97,13 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
         <Text style={styles.title}>QR Backup</Text>
         <TouchableOpacity onPress={onDone}><Text style={styles.cancel}>Tutup</Text></TouchableOpacity>
       </View>
-      <Text style={styles.hint}>Pilih checkpoint untuk menampilkan QR-nya</Text>
+      <Text style={styles.hint}>Pilih checkpoint untuk menampilkan QR dinamis (berlaku 5 menit)</Text>
       <ScrollView style={{ flex: 1 }}>
         {checkpoints.map((cp) => (
-          <TouchableOpacity key={cp.id} style={styles.card} onPress={() => {
-            if (!cp.qr_code_hash) { Alert.alert("Belum Ada QR", "Checkpoint ini belum punya QR hash. Pasang NFC tag dulu."); return; }
-            setSelected(cp);
-          }}>
+          <TouchableOpacity key={cp.id} style={styles.card} onPress={() => setSelected(cp)}>
             <View style={{ flex: 1 }}>
               <Text style={styles.cardName}>{cp.name}</Text>
-              <Text style={styles.cardSub}>
-                {cp.qr_code_hash ? `QR: ${cp.qr_code_hash}` : "Belum ada QR hash"}
-              </Text>
+              <Text style={styles.cardSub}>QR dinamis — anti screenshot</Text>
             </View>
             <Text style={styles.arrow}>›</Text>
           </TouchableOpacity>
@@ -97,7 +127,10 @@ const styles = StyleSheet.create({
   arrow: { fontSize: 20, color: "#9ca3af" },
   sub: { fontSize: 13, color: "#6b7280", marginTop: 4, textAlign: "center" },
   qrBox: { backgroundColor: "#fff", borderRadius: 16, padding: 24, alignItems: "center", marginTop: 24, shadowColor: "#000", shadowOpacity: 0.08, shadowRadius: 8, elevation: 2 },
-  noQr: { color: "#9ca3af", padding: 40 },
-  hash: { fontSize: 11, color: "#9ca3af", textAlign: "center", marginTop: 12 },
+  timer: { backgroundColor: "#d1fae5", borderRadius: 8, paddingVertical: 8, paddingHorizontal: 16, marginTop: 16, alignSelf: "center" },
+  timerExpired: { backgroundColor: "#fee2e2" },
+  timerText: { fontSize: 14, fontWeight: "600", color: "#065f46" },
+  refreshBtn: { marginTop: 16, alignSelf: "center", padding: 10 },
+  refreshText: { color: "#2563eb", fontSize: 14, fontWeight: "600" },
   tip: { fontSize: 12, color: "#6b7280", textAlign: "center", marginTop: 16 },
 });
