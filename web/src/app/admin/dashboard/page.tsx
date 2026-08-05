@@ -3,6 +3,7 @@ import { DashboardStats } from "@/components/admin/dashboard-stats";
 import { CompletionChart } from "@/components/admin/completion-chart";
 import { AttendanceTable } from "@/components/admin/attendance-table";
 import { CheckpointTable } from "@/components/admin/checkpoint-table";
+import { QrSettingsPanel } from "@/components/admin/qr-settings-panel";
 
 export const dynamic = "force-dynamic";
 
@@ -36,6 +37,7 @@ export default async function DashboardPage() {
       <h2 className="text-2xl font-bold">Dashboard</h2>
       <DashboardStats />
       <CompletionChart data={completionData} />
+      <QrSettingsPanel />
       <AttendanceTable />
       <CheckpointTable />
     </div>

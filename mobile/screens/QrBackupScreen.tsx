@@ -7,8 +7,7 @@ import QRCode from "react-native-qrcode-svg";
 import { getCheckpointsForPairing, PairingCheckpoint } from "../lib/supervisor";
 import { supabase } from "../lib/supabase";
 
-const VALIDITY_SECONDS = 300; // 5 menit
-const REFRESH_EVERY_SECONDS = 240; // refresh 4 menit sebelum expire
+const DEFAULT_VALIDITY_MINUTES = 5; // fallback jika config tidak ada
 
 function buildToken(checkpointId: string): string {
   return `dy_${checkpointId}_${Math.floor(Date.now() / 1000)}`;
@@ -19,7 +18,8 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
   const [selected, setSelected] = useState<PairingCheckpoint | null>(null);
   const [loading, setLoading] = useState(true);
   const [token, setToken] = useState("");
-  const [secondsLeft, setSecondsLeft] = useState(VALIDITY_SECONDS);
+  const [secondsLeft, setSecondsLeft] = useState(DEFAULT_VALIDITY_MINUTES * 60);
+  const [validityMinutes, setValidityMinutes] = useState(DEFAULT_VALIDITY_MINUTES);
 
   useEffect(() => {
     (async () => {
@@ -30,6 +30,14 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
         const cps = await getCheckpointsForPairing(dbUser.site_id);
         setCheckpoints(cps);
       }
+      // Baca durasi berlaku dari config
+      const { data: cfg } = await supabase
+        .from("app_config")
+        .select("value")
+        .eq("key", "qr_validity_minutes")
+        .maybeSingle();
+      const minutes = parseInt(cfg?.value || String(DEFAULT_VALIDITY_MINUTES), 10) || DEFAULT_VALIDITY_MINUTES;
+      setValidityMinutes(minutes);
       setLoading(false);
     })();
   }, []);
@@ -37,15 +45,16 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
   // Saat checkpoint dipilih: buat token + mulai countdown + auto-refresh
   useEffect(() => {
     if (!selected?.id) return;
+    const totalSec = validityMinutes * 60;
     setToken(buildToken(selected.id));
-    setSecondsLeft(VALIDITY_SECONDS);
+    setSecondsLeft(totalSec);
 
     const countdown = setInterval(() => {
       setSecondsLeft((s) => {
         if (s <= 1) {
           // Expire: generate token baru
           setToken(buildToken(selected.id));
-          return VALIDITY_SECONDS;
+          return totalSec;
         }
         return s - 1;
       });
@@ -53,11 +62,11 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
 
     const autoRefresh = setInterval(() => {
       setToken(buildToken(selected.id));
-      setSecondsLeft(VALIDITY_SECONDS);
-    }, REFRESH_EVERY_SECONDS * 1000);
+      setSecondsLeft(totalSec);
+    }, (totalSec - 60) * 1000); // refresh 1 menit sebelum expire
 
     return () => { clearInterval(countdown); clearInterval(autoRefresh); };
-  }, [selected?.id]);
+  }, [selected?.id, validityMinutes]);
 
   if (loading) {
     return <View style={styles.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
@@ -74,7 +83,7 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
           <TouchableOpacity onPress={onDone}><Text style={styles.cancel}>Tutup</Text></TouchableOpacity>
         </View>
         <Text style={styles.title}>{selected.name}</Text>
-        <Text style={styles.sub}>QR dinamis — berlaku 5 menit, anti screenshot</Text>
+        <Text style={styles.sub}>QR dinamis — berlaku {validityMinutes} menit, anti screenshot</Text>
         <View style={styles.qrBox}>
           <QRCode value={token} size={260} />
         </View>
@@ -83,7 +92,7 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
             {expired ? "Kedaluwarsa — menunggu QR baru..." : `Berlaku ${Math.floor(secondsLeft / 60)}:${String(secondsLeft % 60).padStart(2, "0")}`}
           </Text>
         </View>
-        <TouchableOpacity style={styles.refreshBtn} onPress={() => { setToken(buildToken(selected.id)); setSecondsLeft(VALIDITY_SECONDS); }}>
+        <TouchableOpacity style={styles.refreshBtn} onPress={() => { setToken(buildToken(selected.id)); setSecondsLeft(validityMinutes * 60); }}>
           <Text style={styles.refreshText}>Refresh QR Sekarang</Text>
         </TouchableOpacity>
         <Text style={styles.tip}>Naikkan kecerahan layar agar mudah di-scan</Text>
@@ -97,7 +106,7 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
         <Text style={styles.title}>QR Backup</Text>
         <TouchableOpacity onPress={onDone}><Text style={styles.cancel}>Tutup</Text></TouchableOpacity>
       </View>
-      <Text style={styles.hint}>Pilih checkpoint untuk menampilkan QR dinamis (berlaku 5 menit)</Text>
+      <Text style={styles.hint}>Pilih checkpoint untuk menampilkan QR dinamis (berlaku {validityMinutes} menit)</Text>
       <ScrollView style={{ flex: 1 }}>
         {checkpoints.map((cp) => (
           <TouchableOpacity key={cp.id} style={styles.card} onPress={() => setSelected(cp)}>

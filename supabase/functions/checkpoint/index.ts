@@ -67,10 +67,19 @@ Deno.serve(async (req) => {
       const issuedAt = parseInt(parts[2], 10);
       if (isNaN(issuedAt)) return err("Token QR tidak valid", 400);
 
+      // Baca durasi berlaku dari config (default 5 menit)
+      const { data: cfg } = await supabase
+        .from("app_config")
+        .select("value")
+        .eq("key", "qr_validity_minutes")
+        .maybeSingle();
+      const validityMinutes = parseInt(cfg?.value || "5", 10) || 5;
+      const validitySec = validityMinutes * 60;
+
       const nowSec = Math.floor(Date.now() / 1000);
       const age = nowSec - issuedAt;
-      if (age < 0 || age > 300) {
-        return err("QR kedaluwarsa — minta supervisor menampilkan QR baru", 400);
+      if (age < 0 || age > validitySec) {
+        return err(`QR kedaluwarsa (berlaku ${validityMinutes} menit) — minta supervisor menampilkan QR baru`, 400);
       }
 
       const { data: cp } = await supabase
