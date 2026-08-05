@@ -29,16 +29,16 @@ Deno.serve(async (req) => {
   if (!dbUser || dbUser.role !== "supervisor") {
     return err("Hanya supervisor yang bisa set lokasi site", 403);
   }
-  if (!dbUser.site_id) return err("Anda belum ditugaskan ke site", 400);
 
   const body = await req.json();
-  const { latitude, longitude } = body;
+  const { site_id, latitude, longitude } = body;
+  if (!site_id) return err("Site harus dipilih", 400);
   if (!latitude || !longitude) return err("Koordinat GPS diperlukan", 400);
 
   const { data: site, error: siteErr } = await supabase
     .from("sites")
     .select("id, name")
-    .eq("id", dbUser.site_id)
+    .eq("id", site_id)
     .single();
 
   if (!site || siteErr) return err("Site tidak ditemukan", 404);

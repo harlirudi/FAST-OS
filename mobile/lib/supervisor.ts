@@ -229,6 +229,7 @@ export async function getCheckpointsForPairing(siteId: string): Promise<PairingC
 }
 
 export async function updateSiteLocation(
+  siteId: string,
   latitude: number,
   longitude: number
 ): Promise<{ success: boolean; message: string }> {
@@ -239,9 +240,16 @@ export async function updateSiteLocation(
       "Content-Type": "application/json",
       Authorization: `Bearer ${session?.access_token}`,
     },
-    body: JSON.stringify({ latitude, longitude }),
+    body: JSON.stringify({ site_id: siteId, latitude, longitude }),
   });
   const data = await res.json();
   if (!res.ok) return { success: false, message: data.error || "Gagal update lokasi" };
   return { success: true, message: data.message };
+}
+
+export type SiteOption = { id: string; name: string };
+
+export async function getAllSites(): Promise<SiteOption[]> {
+  const { data } = await supabase.from("sites").select("id, name").order("name");
+  return (data || []) as SiteOption[];
 }

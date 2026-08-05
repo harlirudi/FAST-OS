@@ -1,30 +1,30 @@
 import React, { useState, useEffect } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert,
+  View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Modal, FlatList,
 } from "react-native";
 import * as Location from "expo-location";
-import { updateSiteLocation } from "../lib/supervisor";
-import { supabase } from "../lib/supabase";
+import { updateSiteLocation, getAllSites, SiteOption } from "../lib/supervisor";
 
 export default function SetSiteLocationScreen({ onDone }: { onDone: () => void }) {
-  const [siteName, setSiteName] = useState("");
+  const [sites, setSites] = useState<SiteOption[]>([]);
+  const [selectedSite, setSelectedSite] = useState<SiteOption | null>(null);
+  const [showPicker, setShowPicker] = useState(false);
   const [loading, setLoading] = useState(true);
   const [locating, setLocating] = useState(false);
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
-      const { data: dbUser } = await supabase.from("users").select("site_id").eq("auth_id", user.id).single();
-      if (dbUser?.site_id) {
-        const { data: site } = await supabase.from("sites").select("name").eq("id", dbUser.site_id).single();
-        setSiteName(site?.name || "");
-      }
+      const allSites = await getAllSites();
+      setSites(allSites);
       setLoading(false);
     })();
   }, []);
 
   const handleSetLocation = async () => {
+    if (!selectedSite) {
+      Alert.alert("Pilih Site", "Pilih site dulu sebelum set lokasi.");
+      return;
+    }
     setLocating(true);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -33,7 +33,7 @@ export default function SetSiteLocationScreen({ onDone }: { onDone: () => void }
         return;
       }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      const res = await updateSiteLocation(loc.coords.latitude, loc.coords.longitude);
+      const res = await updateSiteLocation(selectedSite.id, loc.coords.latitude, loc.coords.longitude);
       if (res.success) {
         Alert.alert(
           "Berhasil",
@@ -61,9 +61,16 @@ export default function SetSiteLocationScreen({ onDone }: { onDone: () => void }
         <TouchableOpacity onPress={onDone}><Text style={styles.cancel}>Tutup</Text></TouchableOpacity>
       </View>
 
+      <Text style={styles.label}>Pilih Site</Text>
+      <TouchableOpacity style={styles.picker} onPress={() => setShowPicker(true)}>
+        <Text style={selectedSite ? styles.pickerText : styles.pickerPlaceholder}>
+          {selectedSite ? selectedSite.name : "Pilih site..."}
+        </Text>
+        <Text style={styles.pickerArrow}>▾</Text>
+      </TouchableOpacity>
+
       <Text style={styles.hint}>
-        Site: <Text style={{ fontWeight: "600" }}>{siteName || "?"}</Text>
-        {"\n\n"}Berdirilah di titik yang dianggap pusat site (misal depan gedung), lalu tekan tombol di bawah. Koordinat GPS saat ini akan menjadi acuan geofencing check-in/out cleaner.
+        {"Berdirilah di titik yang dianggap pusat site (misal depan gedung), lalu tekan tombol di bawah. Koordinat GPS saat ini akan menjadi acuan geofencing check-in/out cleaner."}
       </Text>
 
       <TouchableOpacity
@@ -75,8 +82,32 @@ export default function SetSiteLocationScreen({ onDone }: { onDone: () => void }
       </TouchableOpacity>
 
       <Text style={styles.note}>
-        Radius geofencing saat ini: 50m (bisa diubah di web admin → Site)
+        Radius geofencing: 50m (ubah di web admin → Site)
       </Text>
+
+      <Modal visible={showPicker} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Pilih Site</Text>
+            <FlatList
+              data={sites}
+              keyExtractor={(s) => s.id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.siteRow, selectedSite?.id === item.id && styles.siteRowSelected]}
+                  onPress={() => { setSelectedSite(item); setShowPicker(false); }}
+                >
+                  <Text style={styles.siteRowText}>{item.name}</Text>
+                  {selectedSite?.id === item.id && <Text style={styles.checkMark}>✓</Text>}
+                </TouchableOpacity>
+              )}
+            />
+            <TouchableOpacity style={styles.modalClose} onPress={() => setShowPicker(false)}>
+              <Text style={styles.modalCloseText}>Batal</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -87,9 +118,27 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
   title: { fontSize: 20, fontWeight: "bold", color: "#111827" },
   cancel: { color: "#6b7280", fontSize: 14 },
+  label: { fontSize: 13, color: "#6b7280", marginBottom: 6 },
+  picker: {
+    backgroundColor: "#fff", borderRadius: 10, padding: 16, marginBottom: 16,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    borderWidth: 1, borderColor: "#d1d5db",
+  },
+  pickerText: { fontSize: 15, color: "#111827", fontWeight: "600" },
+  pickerPlaceholder: { fontSize: 15, color: "#9ca3af" },
+  pickerArrow: { fontSize: 16, color: "#6b7280" },
   hint: { fontSize: 14, color: "#374151", lineHeight: 22, backgroundColor: "#eff6ff", borderRadius: 10, padding: 16, marginBottom: 24 },
   setBtn: { backgroundColor: "#2563eb", borderRadius: 12, padding: 18, alignItems: "center" },
   btnDisabled: { opacity: 0.6 },
   setBtnText: { color: "#fff", fontSize: 16, fontWeight: "600" },
   note: { fontSize: 12, color: "#9ca3af", textAlign: "center", marginTop: 16 },
+  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "rgba(0,0,0,0.5)", padding: 24 },
+  modalCard: { backgroundColor: "#fff", borderRadius: 12, padding: 20, width: "100%", maxHeight: "70%" },
+  modalTitle: { fontSize: 18, fontWeight: "bold", marginBottom: 12 },
+  siteRow: { paddingVertical: 14, paddingHorizontal: 12, borderRadius: 8, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  siteRowSelected: { backgroundColor: "#eff6ff" },
+  siteRowText: { fontSize: 15, color: "#111827" },
+  checkMark: { fontSize: 16, color: "#2563eb", fontWeight: "bold" },
+  modalClose: { marginTop: 12, alignItems: "center", padding: 10 },
+  modalCloseText: { color: "#6b7280", fontSize: 14 },
 });
