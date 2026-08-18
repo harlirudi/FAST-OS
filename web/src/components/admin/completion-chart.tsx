@@ -9,20 +9,27 @@ type Props = {
 
 export function CompletionChart({ data }: Props) {
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader>
         <CardTitle>Completion Rate per Site</CardTitle>
       </CardHeader>
-      <CardContent>
-        <ResponsiveContainer width="100%" height={300}>
-          <BarChart data={data}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis domain={[0, 100]} unit="%" />
-            <Tooltip formatter={(v: unknown) => `${v}%`} />
-            <Bar dataKey="rate" fill="#2563eb" radius={[4, 4, 0, 0]} />
-          </BarChart>
-        </ResponsiveContainer>
+      <CardContent className="min-w-0">
+        <div className="h-[300px] w-full min-w-0">
+          <ResponsiveContainer width="100%" height="100%">
+            <BarChart data={data} margin={{ top: 8, right: 16, bottom: 8, left: -16 }}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis
+                dataKey="name"
+                interval={0}
+                tick={{ fontSize: 11 }}
+                tickFormatter={(v: string) => (v.length > 14 ? `${v.slice(0, 13)}…` : v)}
+              />
+              <YAxis domain={[0, 100]} unit="%" width={40} />
+              <Tooltip formatter={(v: unknown) => `${v}%`} />
+              <Bar dataKey="rate" fill="#2563eb" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
+        </div>
       </CardContent>
     </Card>
   );

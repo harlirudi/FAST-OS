@@ -67,14 +67,14 @@ export function CheckpointTable() {
   );
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Log Checkpoint</CardTitle>
         <Button size="sm" variant="outline" onClick={() => exportCSV(["Checkpoint","Site","Cleaner","Status","Tipe","Mulai","Durasi"], r => `"${r.checkpointName}","${r.siteName}","${r.userName}",${r.status},${r.logType==="inspection"?"Inspeksi":"Cleaning"},${r.startedAt},${r.duration??""}`, "checkpoint_logs.csv")}>
           <Download className="mr-1 h-3 w-3" /> CSV
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0">
         <div className="mb-4 grid grid-cols-4 gap-2">
           <div><Label className="text-xs">Status</Label>
             <Select value={filters.status} onValueChange={(v) => setFilters({...filters, status: v === "all" || !v ? "" : v})}>
@@ -92,7 +92,9 @@ export function CheckpointTable() {
             <Button size="sm" variant="outline" onClick={() => setFilters({ status: "", date: "" })}>Reset</Button>
           </div>
         </div>
-        {loading ? <p className="text-center text-sm text-gray-400">Memuat...</p> : <DataTable columns={columns} data={rows} />}
+        <div className="min-h-[120px]">
+          {loading ? <p className="pt-8 text-center text-sm text-gray-400">Memuat...</p> : <DataTable columns={columns} data={rows} />}
+        </div>
       </CardContent>
     </Card>
   );

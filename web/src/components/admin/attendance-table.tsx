@@ -50,14 +50,14 @@ export function AttendanceTable() {
   );
 
   return (
-    <Card>
+    <Card className="overflow-hidden">
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle>Log Absensi</CardTitle>
         <Button size="sm" variant="outline" onClick={() => exportCSV(["Cleaner","Site","Tipe","Waktu","Jarak","Override","Alasan"], r => `"${r.userName}","${r.siteName}",${r.type==="check_in"?"Masuk":"Keluar"},${r.timestamp},${r.distance},${r.flagged?"Ya":"Tidak"},"${r.reason||""}"`, "attendance.csv")}>
           <Download className="mr-1 h-3 w-3" /> CSV
         </Button>
       </CardHeader>
-      <CardContent>
+      <CardContent className="min-w-0">
         <div className="mb-4 grid grid-cols-4 gap-2">
           <div><Label className="text-xs">Tipe</Label>
             <Select value={filters.type} onValueChange={(v) => setFilters({...filters, type: v === "all" || !v ? "" : v})}>
@@ -82,7 +82,9 @@ export function AttendanceTable() {
             <Button size="sm" variant="outline" onClick={() => setFilters({ type: "", flagged: "", date: "" })}>Reset</Button>
           </div>
         </div>
-        {loading ? <p className="text-center text-sm text-gray-400">Memuat...</p> : <DataTable columns={attendanceColumns} data={rows} />}
+        <div className="min-h-[120px]">
+          {loading ? <p className="pt-8 text-center text-sm text-gray-400">Memuat...</p> : <DataTable columns={attendanceColumns} data={rows} />}
+        </div>
       </CardContent>
     </Card>
   );

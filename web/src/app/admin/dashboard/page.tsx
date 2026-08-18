@@ -33,7 +33,7 @@ export default async function DashboardPage() {
   });
 
   return (
-    <div className="space-y-6">
+    <div className="flex min-w-0 flex-col gap-6">
       <h2 className="text-2xl font-bold">Dashboard</h2>
       <DashboardStats />
       <CompletionChart data={completionData} />
