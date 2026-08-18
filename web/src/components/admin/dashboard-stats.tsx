@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { createClient } from "@/lib/supabase/client";
 import { Users, MapPin, Clock, AlertTriangle } from "lucide-react";
@@ -14,7 +14,7 @@ export function DashboardStats() {
     alerts: 0,
     loading: true,
   });
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const fetchStats = useCallback(
     async (isInitial = false) => {

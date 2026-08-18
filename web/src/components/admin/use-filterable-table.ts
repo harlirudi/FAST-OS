@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 
 type FilterState = Record<string, string>;
@@ -18,40 +18,42 @@ export function useFilterableTable<T>(
   const [rows, setRows] = useState<T[]>([]);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<FilterState>(filterDefs);
-  const supabase = createClient();
-  const isFirstRender = useRef(true);
 
-  const fetchData = useCallback(
+  // Stabilkan client supabase — dibuat sekali saja (jangan tiap render)
+  const supabase = useMemo(() => createClient(), []);
+
+  // Simpan fetchFn terbaru di ref agar tidak memicu re-run effect
+  const fetchFnRef = useRef(fetchFn);
+  fetchFnRef.current = fetchFn;
+
+  const runFetch = useCallback(
     async (isSilent = false) => {
-      if (!isSilent) {
-        setLoading(true);
-      }
+      if (!isSilent) setLoading(true);
       try {
-        const data = await fetchFn(supabase, filters);
+        const data = await fetchFnRef.current(supabase, filters);
         setRows(data);
       } catch (err) {
         console.error(`Error fetching table data for ${tableName}:`, err);
       } finally {
-        if (!isSilent) {
-          setLoading(false);
-        }
+        if (!isSilent) setLoading(false);
       }
     },
-    [filters, supabase, fetchFn, tableName]
+    // Hanya bergantung pada nilai yang benar-benar mengubah hasil fetch
+    [supabase, filters, tableName]
   );
 
-  // Fetch when filters change or on initial mount
+  // Fetch saat mount atau saat filter berubah
   useEffect(() => {
-    fetchData(false);
-  }, [fetchData]);
+    runFetch(false);
+  }, [runFetch]);
 
-  // Background polling every 30s silently (no skeleton/loading state flicker)
+  // Background polling 30 detik secara hening (tanpa skeleton/flicker)
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchData(true);
+      runFetch(true);
     }, 30000);
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [runFetch]);
 
   const exportCSV = (headers: string[], rowMapper: (r: T) => string, filename: string) => {
     const body = rows.map(rowMapper).join("\n");
@@ -64,5 +66,5 @@ export function useFilterableTable<T>(
     URL.revokeObjectURL(url);
   };
 
-  return { rows, loading, filters, setFilters, exportCSV, refresh: () => fetchData(false) };
+  return { rows, loading, filters, setFilters, exportCSV, refresh: () => runFetch(false) };
 }
