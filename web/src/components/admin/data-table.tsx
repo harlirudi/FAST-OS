@@ -18,11 +18,15 @@ import {
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
+  isLoading?: boolean;
+  skeletonRowCount?: number;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
+  isLoading = false,
+  skeletonRowCount = 5,
 }: DataTableProps<TData, TValue>) {
   const table = useReactTable({
     data,
@@ -31,13 +35,13 @@ export function DataTable<TData, TValue>({
   });
 
   return (
-    <div className="rounded-md border">
+    <div className="rounded-md border bg-white overflow-hidden">
       <Table>
-        <TableHeader>
+        <TableHeader className="bg-slate-50">
           {table.getHeaderGroups().map((headerGroup) => (
             <TableRow key={headerGroup.id}>
               {headerGroup.headers.map((header) => (
-                <TableHead key={header.id}>
+                <TableHead key={header.id} className="font-semibold text-slate-700">
                   {header.isPlaceholder
                     ? null
                     : flexRender(
@@ -50,9 +54,19 @@ export function DataTable<TData, TValue>({
           ))}
         </TableHeader>
         <TableBody>
-          {table.getRowModel().rows.length ? (
+          {isLoading ? (
+            Array.from({ length: skeletonRowCount }).map((_, rIdx) => (
+              <TableRow key={`skeleton-row-${rIdx}`} className="hover:bg-transparent">
+                {columns.map((_, cIdx) => (
+                  <TableCell key={`skeleton-cell-${rIdx}-${cIdx}`} className="py-4">
+                    <div className="h-4 w-4/5 animate-pulse rounded bg-slate-200/80" />
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : table.getRowModel().rows.length ? (
             table.getRowModel().rows.map((row) => (
-              <TableRow key={row.id}>
+              <TableRow key={row.id} className="hover:bg-slate-50/80">
                 {row.getVisibleCells().map((cell) => (
                   <TableCell key={cell.id}>
                     {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -62,7 +76,7 @@ export function DataTable<TData, TValue>({
             ))
           ) : (
             <TableRow>
-              <TableCell colSpan={columns.length} className="text-center">
+              <TableCell colSpan={columns.length} className="h-24 text-center text-slate-500">
                 Tidak ada data.
               </TableCell>
             </TableRow>

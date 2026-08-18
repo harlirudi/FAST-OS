@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
+import { supabase, supabaseUrl } from "./supabase";
 
 const QUEUE_KEY = "sync_queue";
 
@@ -27,7 +28,6 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
   check_in: {
     label: "Check-In",
     handler: async (p, token) => {
-      const { supabaseUrl } = await import("./supabase");
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ type: "check_in", latitude: p.latitude, longitude: p.longitude, photo_url: p.photoUrl, override_reason: p.reason }),
@@ -38,7 +38,6 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
   check_out: {
     label: "Check-Out",
     handler: async (p, token) => {
-      const { supabaseUrl } = await import("./supabase");
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ type: "check_out", latitude: p.latitude, longitude: p.longitude, photo_url: p.photoUrl }),
@@ -49,7 +48,6 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
   checkpoint_start: {
     label: "Mulai Sesi",
     handler: async (p, token) => {
-      const { supabaseUrl } = await import("./supabase");
       const res = await fetch(`${supabaseUrl}/functions/v1/checkpoint`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: "start", nfc_tag_id: p.mode === "nfc" ? p.identifier : undefined, qr_code_hash: p.mode === "qr" ? p.identifier : undefined, latitude: p.latitude, longitude: p.longitude }),
@@ -60,7 +58,6 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
   checkpoint_photo: {
     label: "Upload Foto",
     handler: async (p, token) => {
-      const { supabaseUrl } = await import("./supabase");
       const res = await fetch(`${supabaseUrl}/functions/v1/checkpoint`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: "photo", session_id: p.sessionId, photo_type: p.photoType, photo_url: p.photoUrl }),
@@ -71,7 +68,6 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
   checkpoint_complete: {
     label: "Selesai Sesi",
     handler: async (p, token) => {
-      const { supabaseUrl } = await import("./supabase");
       const res = await fetch(`${supabaseUrl}/functions/v1/checkpoint`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ action: "complete", session_id: p.sessionId, photo_url: p.photoUrl, latitude: p.latitude, longitude: p.longitude }),
@@ -144,7 +140,6 @@ export async function syncAll(): Promise<number> {
 
   const queue: QueuedAction[] = JSON.parse(raw);
   let synced = 0;
-  const { supabase } = await import("./supabase");
   const { data: { session } } = await supabase.auth.getSession();
   const token = session?.access_token;
   if (!token) return 0;
