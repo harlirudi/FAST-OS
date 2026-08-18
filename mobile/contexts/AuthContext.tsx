@@ -1,15 +1,21 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { Session, User } from "@supabase/supabase-js";
+import * as WebBrowser from "expo-web-browser";
+import { makeRedirectUri } from "expo-auth-session";
 import { supabase } from "../lib/supabase";
+
+WebBrowser.maybeCompleteAuthSession();
 
 type AuthContextType = {
   session: Session | null;
   user: User | null;
   role: string | null;
+  hasProfile: boolean;
+  hasSite: boolean;
   loading: boolean;
-  signInWithEmail: (email: string, password: string) => Promise<string | null>;
-  signInWithPhone: (phone: string) => Promise<string | null>;
+  signInWithGoogle: () => Promise<string | null>;
   signOut: () => Promise<void>;
+  refreshProfile: () => Promise<void>;
 };
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
@@ -18,53 +24,66 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [hasProfile, setHasProfile] = useState(false);
+  const [hasSite, setHasSite] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const fetchRole = async (authUser: User) => {
-    const { data } = await supabase
+  const refreshProfile = useCallback(async () => {
+    const { data: { user: authUser } } = await supabase.auth.getUser();
+    if (!authUser) {
+      setRole(null);
+      setHasProfile(false);
+      setHasSite(false);
+      return;
+    }
+    const { data: dbUser } = await supabase
       .from("users")
-      .select("role")
+      .select("role, phone, site_id")
       .eq("auth_id", authUser.id)
-      .single();
-    setRole(data?.role ?? null);
-  };
+      .maybeSingle();
+    setRole(dbUser?.role ?? null);
+    setHasProfile(!!dbUser?.phone);
+    setHasSite(!!dbUser?.site_id);
+  }, []);
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchRole(session.user);
-      }
-      setLoading(false);
+      refreshProfile().finally(() => setLoading(false));
     });
 
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setSession(session);
       setUser(session?.user ?? null);
-      if (session?.user) {
-        fetchRole(session.user);
-      } else {
-        setRole(null);
-      }
+      refreshProfile();
     });
 
     return () => listener.subscription.unsubscribe();
-  }, []);
+  }, [refreshProfile]);
 
-  const signInWithEmail = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
+  const signInWithGoogle = async () => {
+    const redirectUri = makeRedirectUri({
+      scheme: "facilityos",
+      path: "auth/callback",
     });
-    return error?.message ?? null;
-  };
+    const { data, error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: redirectUri,
+        skipBrowserRedirect: true,
+      },
+    });
+    if (error) return error.message;
+    if (!data?.url) return "Tidak ada URL login Google";
 
-  const signInWithPhone = async (phone: string) => {
-    const { error } = await supabase.auth.signInWithOtp({
-      phone,
-    });
-    return error?.message ?? null;
+    // Buka browser untuk login Google, lalu kembali ke app
+    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+    if (result.type === "success") {
+      await refreshProfile();
+      return null;
+    }
+    return result.type === "cancel" ? "Login dibatalkan" : "Gagal login Google";
   };
 
   const signOut = async () => {
@@ -73,7 +92,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, role, loading, signInWithEmail, signInWithPhone, signOut }}
+      value={{ session, user, role, hasProfile, hasSite, loading, signInWithGoogle, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

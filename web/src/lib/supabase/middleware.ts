@@ -31,15 +31,27 @@ export async function updateSession(request: NextRequest) {
 
   const pathname = request.nextUrl.pathname;
 
-  // Baca role dari database public.users
+  // Baca profil dari database public.users
   let role: string | null = null;
+  let hasProfile = false;
   if (user) {
     const { data: dbUser } = await supabase
       .from("users")
-      .select("role")
+      .select("role, phone")
       .eq("auth_id", user.id)
       .single();
     role = dbUser?.role ?? null;
+    hasProfile = !!dbUser?.phone;
+  }
+
+  // User sudah login tapi belum lengkapi data diri → onboarding
+  if (user && !hasProfile && !pathname.startsWith("/onboarding") && !pathname.startsWith("/auth")) {
+    return NextResponse.redirect(new URL("/onboarding", request.url));
+  }
+
+  // Sudah lengkap data diri tapi masih di onboarding → lanjut
+  if (user && hasProfile && pathname.startsWith("/onboarding")) {
+    return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
   // Halaman admin: hanya admin
@@ -58,7 +70,7 @@ export async function updateSession(request: NextRequest) {
   }
 
   // Redirect dari /login ke dashboard (kalau sudah login)
-  if (pathname === "/login" && user) {
+  if ((pathname === "/login" || pathname === "/login-admin") && user) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 

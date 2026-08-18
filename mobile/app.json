@@ -2,6 +2,7 @@
   "expo": {
     "name": "mobile",
     "slug": "mobile",
+    "scheme": "facilityos",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -35,7 +36,8 @@
     },
     "plugins": [
       "expo-secure-store",
-      "react-native-nfc-manager"
+      "react-native-nfc-manager",
+      "expo-web-browser"
     ],
     "extra": {
       "eas": {
