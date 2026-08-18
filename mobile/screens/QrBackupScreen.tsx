@@ -85,7 +85,7 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
         <Text style={styles.title}>{selected.name}</Text>
         <Text style={styles.sub}>QR dinamis — berlaku {validityMinutes} menit, anti screenshot</Text>
         <View style={styles.qrBox}>
-          <QRCode value={token} size={260} />
+          {token ? <QRCode value={token} size={260} /> : <ActivityIndicator color="#2563eb" />}
         </View>
         <View style={[styles.timer, expired && styles.timerExpired]}>
           <Text style={styles.timerText}>
