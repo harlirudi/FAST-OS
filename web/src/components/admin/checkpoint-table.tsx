@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/admin/data-table";
+import { SkeletonTable } from "@/components/admin/skeleton-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { useFilterableTable } from "./use-filterable-table";
@@ -93,7 +94,7 @@ export function CheckpointTable() {
           </div>
         </div>
         <div className="min-h-[120px]">
-          {loading ? <p className="pt-8 text-center text-sm text-gray-400">Memuat...</p> : <DataTable columns={columns} data={rows} />}
+          {loading ? <SkeletonTable columnCount={9} /> : <DataTable columns={columns} data={rows} />}
         </div>
       </CardContent>
     </Card>

@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/admin/data-table";
+import { SkeletonTable } from "@/components/admin/skeleton-table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useFilterableTable } from "./use-filterable-table";
 import type { ColumnDef } from "@tanstack/react-table";
@@ -83,7 +84,7 @@ export function AttendanceTable() {
           </div>
         </div>
         <div className="min-h-[120px]">
-          {loading ? <p className="pt-8 text-center text-sm text-gray-400">Memuat...</p> : <DataTable columns={attendanceColumns} data={rows} />}
+          {loading ? <SkeletonTable columnCount={6} /> : <DataTable columns={attendanceColumns} data={rows} />}
         </div>
       </CardContent>
     </Card>
