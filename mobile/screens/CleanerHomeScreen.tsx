@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert,
-  ActivityIndicator, Modal, TextInput, ScrollView,
+  ActivityIndicator, Modal, TextInput, ScrollView, Image,
 } from "react-native";
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
@@ -50,6 +50,8 @@ export default function CleanerHomeScreen() {
 
   // Foto dari kamera → kompres lokal → deteksi wajah (ML Kit) → upload.
   // Foto tanpa wajah DITOLAK (anti foto sembarang) — check-in tidak lanjut.
+  // Catatan: di Android, hasil detectFaces TIDAK punya field `success`
+  // (hanya faces + imagePath) — jadi cek faces.length, bukan result.success.
   const captureAndVerifyPhoto = async (): Promise<string | null> => {
     const cam = await ImagePicker.requestCameraPermissionsAsync();
     if (!cam.granted) throw new Error("Izin kamera ditolak");
@@ -64,13 +66,44 @@ export default function CleanerHomeScreen() {
       if (faceDetector.status === "ready" || faceDetector.status === "error") break;
       await new Promise((res) => setTimeout(res, 100));
     }
-    const result = await faceDetector.detectFaces(compressed.uri);
-    if (!result?.success || (result.faces?.length ?? 0) === 0) {
+
+    let faces;
+    try {
+      const result = await faceDetector.detectFaces(compressed.uri);
+      faces = result?.faces ?? [];
+    } catch (e: any) {
+      Alert.alert("Gagal Deteksi", "Deteksi wajah tidak berfungsi saat ini. Coba lagi.");
+      return null;
+    }
+
+    if (faces.length === 0) {
       Alert.alert(
         "Foto tidak valid",
         "Wajah tidak terdeteksi pada foto. Harap gunakan foto selfie Anda untuk check-in/check-out."
       );
       return null;
+    }
+
+    // Validasi posisi wajah agar selfie selalu pada frame yang wajar
+    const img = await new Promise<{ width: number; height: number } | null>((resolve) => {
+      Image.getSize(compressed.uri, (width, height) => resolve({ width, height }), () => resolve(null));
+    });
+    if (img) {
+      const frame = faces[0].frame;
+      const fw = frame.size.x;
+      const fh = frame.size.y;
+      const fcX = frame.origin.x + fw / 2;
+      const fcY = frame.origin.y + fh / 2;
+      const faceWideEnough = fw >= img.width * 0.15 && fh >= img.height * 0.15;
+      const centered = Math.abs(fcX - img.width / 2) <= img.width * 0.4
+        && Math.abs(fcY - img.height / 2) <= img.height * 0.4;
+      if (!faceWideEnough || !centered) {
+        Alert.alert(
+          "Posisi Wajah",
+          "Posisikan wajah di tengah bingkai, cukup dekat dengan kamera (selfie), lalu coba lagi."
+        );
+        return null;
+      }
     }
 
     const url = await uploadPhoto(compressed.uri, user!.id);

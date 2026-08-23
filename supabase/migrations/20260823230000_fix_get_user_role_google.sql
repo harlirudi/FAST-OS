@@ -34,7 +34,9 @@ DROP POLICY IF EXISTS "Supervisor read sop_alerts in own site" ON sop_alerts;
 CREATE POLICY "Supervisor read sop_alerts in own site" ON sop_alerts FOR SELECT
   USING (get_user_role() = 'supervisor' AND site_id = get_user_site_id());
 
--- Trigger anti-escalation: cek role via helper (bukan user_metadata.role)
+-- Trigger anti-escalation: cek role via helper (bukan user_metadata.role).
+-- PENTING: panggil public.get_user_role() — trigger pakai search_path=''
+-- sehingga nama fungsi tanpa prefix tidak bisa di-resolve (error update user).
 CREATE OR REPLACE FUNCTION public.prevent_privilege_change()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -42,7 +44,7 @@ SECURITY DEFINER
 SET search_path = ''
 AS $function$
 BEGIN
-  IF get_user_role() <> 'admin' THEN
+  IF public.get_user_role() <> 'admin' THEN
     NEW.role := OLD.role;
     NEW.site_id := OLD.site_id;
   END IF;
