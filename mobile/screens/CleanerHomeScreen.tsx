@@ -141,8 +141,10 @@ export default function CleanerHomeScreen() {
       await doSubmit(type, photoUrl, { lat: l.coords.latitude, lng: l.coords.longitude });
     } catch (e: any) {
       if (e.message !== "Dibatalkan") Alert.alert("Error", e.message);
+    } finally {
+      // Pastikan tombol selalu aktif kembali — termasuk saat foto dibatalkan/ditolak
+      setActionLoading(false);
     }
-    setActionLoading(false);
   };
 
   const handleOverride = async () => {
@@ -150,9 +152,12 @@ export default function CleanerHomeScreen() {
     if (!pendingAction || !pendingPhotoUrl || !pendingLoc) return;
     setShowOverride(false);
     setActionLoading(true);
-    await doSubmit(pendingAction, pendingPhotoUrl, pendingLoc, overrideReason.trim());
-    setOverrideReason("");
-    setActionLoading(false);
+    try {
+      await doSubmit(pendingAction, pendingPhotoUrl, pendingLoc, overrideReason.trim());
+    } finally {
+      setOverrideReason("");
+      setActionLoading(false);
+    }
   };
 
   const handleSessionStarted = (sId: string, cpName: string) => { setActiveSessionId(sId); setActiveCheckpointName(cpName); setScreen("session"); };
