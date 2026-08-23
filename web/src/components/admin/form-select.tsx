@@ -24,9 +24,13 @@ export function FormSelect({
 }) {
   const [value, setValue] = useState(defaultValue || "");
 
+  // Base UI Select butuh peta items: { value: ReactNode } agar tampil label
+  const items = Object.fromEntries(options.map((opt) => [opt.value, opt.label]));
+
   return (
     <>
       <Select
+        items={items}
         value={value || undefined}
         onValueChange={(v) => setValue(v ?? "")}
         required={required}
