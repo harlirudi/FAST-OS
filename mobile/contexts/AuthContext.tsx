@@ -18,7 +18,7 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 
-const AUTH_TIMEOUT_MS = 180_000;
+const AUTH_TIMEOUT_MS = 60_000;
 
 // Buka URL OAuth di browser lalu tunggu deep link balik ke app.
 // Lebih andal daripada openAuthSessionAsync di build standalone Android
@@ -112,7 +112,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshProfile]);
 
   const signInWithGoogle = async () => {
-    const redirectUri = Linking.createURL("auth/callback");
+    // Standalone APK: pakai App Link https (Android intercept URL ini ke app).
+    // Custom scheme (facilityos://) diblokir Chrome saat redirect dari browser.
+    // Dev client (Metro): pakai scheme facilityos seperti biasa.
+    const redirectUri = __DEV__
+      ? Linking.createURL("auth/callback")
+      : "https://web-chi-cyan-20.vercel.app/auth/callback";
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {

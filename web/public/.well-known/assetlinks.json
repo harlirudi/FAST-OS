@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.harlirudi.facilityos",
+      "sha256_cert_fingerprints": [
+        "6E:11:C9:08:D4:4E:65:D8:8E:97:88:EA:B0:7A:58:68:EF:0C:69:D4:C0:D5:B2:EC:82:A0:88:3D:B4:59:83:66"
+      ]
+    }
+  }
+]

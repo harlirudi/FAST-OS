@@ -29,7 +29,21 @@
         "NFC"
       ],
       "predictiveBackGestureEnabled": false,
-      "package": "com.harlirudi.facilityos"
+      "package": "com.harlirudi.facilityos",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "https",
+              "host": "web-chi-cyan-20.vercel.app",
+              "pathPrefix": "/auth/callback"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
