@@ -6,10 +6,9 @@ import {
 import * as Location from "expo-location";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
-import * as FileSystem from "expo-file-system/legacy";
+import { useFaceDetection } from "@infinitered/react-native-mlkit-face-detection";
 import { useAuth } from "../contexts/AuthContext";
-import { getAttendanceStatus, submitAttendance } from "../lib/attendance";
-import { supabase, supabaseUrl } from "../lib/supabase";
+import { getAttendanceStatus, submitAttendance, uploadPhoto } from "../lib/attendance";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
 import { getPendingCount, onPendingChange, getPendingItems, PendingItem } from "../lib/sync";
 import CheckpointScanScreen from "./CheckpointScanScreen";
@@ -18,7 +17,8 @@ import CheckpointSessionScreen from "./CheckpointSessionScreen";
 type Screen = "home" | "scan" | "session";
 
 export default function CleanerHomeScreen() {
-  const { user, signOut } = useAuth();
+  const { user, name, signOut } = useAuth();
+  const faceDetector = useFaceDetection();
   const [screen, setScreen] = useState<Screen>("home");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -48,27 +48,36 @@ export default function CleanerHomeScreen() {
     setLoading(false);
   }, []);
 
-  const takePhotoAndUpload = async (): Promise<string> => {
+  // Foto dari kamera → kompres lokal → deteksi wajah (ML Kit) → upload.
+  // Foto tanpa wajah DITOLAK (anti foto sembarang) — check-in tidak lanjut.
+  const captureAndVerifyPhoto = async (): Promise<string | null> => {
     const cam = await ImagePicker.requestCameraPermissionsAsync();
     if (!cam.granted) throw new Error("Izin kamera ditolak");
     const r = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
-    if (r.canceled || !r.assets?.[0]) throw new Error("Dibatalkan");
+    if (r.canceled || !r.assets?.[0]) return null;
+
     const compressed = await ImageManipulator.manipulateAsync(r.assets[0].uri, [{ resize: { width: 1024 } }],
       { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG });
-    let url = `https://placehold.co/640x480?text=${Date.now()}`;
-    try {
-      const name = `${user?.id || "u"}/${Date.now()}.jpg`;
-      const uploadRes = await FileSystem.uploadAsync(
-        `${supabaseUrl}/storage/v1/object/attendance-photos/${name}`,
-        compressed.uri,
-        { httpMethod: "POST", uploadType: FileSystem.FileSystemUploadType.BINARY_CONTENT,
-          headers: { "Authorization": `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`,
-            "apikey": "sb_publishable_DM8GfA28S1QDr_tTT-zShg_UQ8ggNOb" } }
+
+    // Tunggu model ML Kit siap (maks ±5 detik)
+    for (let i = 0; i < 50; i++) {
+      if (faceDetector.status === "ready" || faceDetector.status === "error") break;
+      await new Promise((res) => setTimeout(res, 100));
+    }
+    const result = await faceDetector.detectFaces(compressed.uri);
+    if (!result?.success || (result.faces?.length ?? 0) === 0) {
+      Alert.alert(
+        "Foto tidak valid",
+        "Wajah tidak terdeteksi pada foto. Harap gunakan foto selfie Anda untuk check-in/check-out."
       );
-      if (uploadRes.status === 200) {
-        url = `${supabaseUrl}/storage/v1/object/public/attendance-photos/${name}`;
-      }
-    } catch {}
+      return null;
+    }
+
+    const url = await uploadPhoto(compressed.uri, user!.id);
+    if (!url) {
+      Alert.alert("Gagal", "Foto gagal diunggah. Periksa koneksi lalu coba lagi.");
+      return null;
+    }
     return url;
   };
 
@@ -93,7 +102,8 @@ export default function CleanerHomeScreen() {
   const handleAttendance = async (type: "check_in" | "check_out") => {
     setActionLoading(true);
     try {
-      const photoUrl = await takePhotoAndUpload();
+      const photoUrl = await captureAndVerifyPhoto();
+      if (!photoUrl) return;
       const l = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       await doSubmit(type, photoUrl, { lat: l.coords.latitude, lng: l.coords.longitude });
     } catch (e: any) {
@@ -126,7 +136,7 @@ export default function CleanerHomeScreen() {
   return (
     <ScrollView style={S.container} contentContainerStyle={S.content}>
       <View style={S.headerRow}>
-        <View><Text style={S.greeting}>Halo, Cleaner!</Text><Text style={S.site}>{siteName||"Belum ditugaskan"}</Text></View>
+        <View><Text style={S.greeting}>Halo, {name || "Cleaner"}!</Text><Text style={S.site}>{siteName||"Belum ditugaskan"}</Text></View>
         {pendingCount>0 && <View style={S.badge}><Text style={S.badgeText}>{pendingCount} pending</Text></View>}
       </View>
       <View style={S.statusCard}>

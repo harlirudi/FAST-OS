@@ -104,6 +104,12 @@ export default function UsersPage() {
       .then(({ data }) => setUsers(data || []));
   };
 
+  const handleDelete = async (id: string, userName: string) => {
+    if (!window.confirm(`Hapus pengguna "${userName}"?`)) return;
+    await deleteUser(id);
+    loadUsers();
+  };
+
   useEffect(() => {
     loadUsers();
   }, [supabase]);
@@ -118,9 +124,14 @@ export default function UsersPage() {
     { id: "actions", header: "Aksi", cell: ({ row }) => (
       <div className="flex gap-2">
         <EditUserDialog user={row.original} onSaved={loadUsers} />
-        <form action={deleteUser.bind(null, row.original.id)}>
-          <Button variant="destructive" size="sm" type="submit"><Trash2 className="h-3 w-3" /></Button>
-        </form>
+        <Button
+          variant="destructive"
+          size="sm"
+          type="button"
+          onClick={() => handleDelete(row.original.id, row.original.name)}
+        >
+          <Trash2 className="h-3 w-3" />
+        </Button>
       </div>
     )},
   ];

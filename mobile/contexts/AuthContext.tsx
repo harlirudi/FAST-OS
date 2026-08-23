@@ -17,6 +17,7 @@ GoogleSignin.configure({
 type AuthContextType = {
   session: Session | null;
   user: User | null;
+  name: string | null;
   role: string | null;
   hasProfile: boolean;
   hasSite: boolean;
@@ -31,6 +32,7 @@ const AuthContext = createContext<AuthContextType>({} as AuthContextType);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [user, setUser] = useState<User | null>(null);
+  const [name, setName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
   const [hasProfile, setHasProfile] = useState(false);
   const [hasSite, setHasSite] = useState(false);
@@ -39,6 +41,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const refreshProfile = useCallback(async () => {
     const { data: { user: authUser } } = await supabase.auth.getUser();
     if (!authUser) {
+      setName(null);
       setRole(null);
       setHasProfile(false);
       setHasSite(false);
@@ -46,9 +49,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
     const { data: dbUser } = await supabase
       .from("users")
-      .select("role, phone, site_id")
+      .select("name, role, phone, site_id")
       .eq("auth_id", authUser.id)
       .maybeSingle();
+    setName(dbUser?.name ?? null);
     setRole(dbUser?.role ?? null);
     setHasProfile(!!dbUser?.phone);
     setHasSite(!!dbUser?.site_id);
@@ -129,7 +133,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, role, hasProfile, hasSite, loading, signInWithGoogle, signOut, refreshProfile }}
+      value={{ session, user, name, role, hasProfile, hasSite, loading, signInWithGoogle, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>
