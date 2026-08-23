@@ -19,6 +19,7 @@ export default async function DashboardPage() {
 
   const role = dbUser?.role ?? "unknown";
   const name = dbUser?.name || user.user_metadata?.full_name || user.email;
+  const hasSite = !!dbUser?.site_id;
 
   if (role === "admin") {
     redirect("/admin/dashboard");
@@ -32,14 +33,28 @@ export default async function DashboardPage() {
         <p className="mt-2 text-sm text-gray-600">
           Peran: {role === "cleaner" ? "Cleaner" : role === "supervisor" ? "Supervisor" : role}
         </p>
-        <div className="mt-4 rounded-lg bg-blue-50 p-4 text-sm text-blue-800">
-          <p className="font-medium">Gunakan aplikasi mobile untuk aktivitas lapangan</p>
-          <ul className="mt-2 list-inside list-disc space-y-1 text-blue-700">
-            <li>Check-in / check-out dengan GPS & selfie</li>
-            <li>Scan checkpoint (NFC / QR)</li>
-            <li>Lihat riwayat & progres harian</li>
-          </ul>
-        </div>
+
+        {!hasSite ? (
+          <div className="mt-6 rounded-lg border border-amber-200 bg-amber-50 p-6 text-center">
+            <p className="text-3xl font-bold text-amber-700">Menunggu Penugasan</p>
+            <p className="mt-3 text-sm text-amber-800">
+              Akun kamu sudah terdaftar, tapi belum ditugaskan ke site manapun.
+            </p>
+            <p className="mt-2 text-sm text-amber-700">
+              Hubungi supervisor atau admin untuk penugasan. Setelah ditugaskan,
+              kamu bisa langsung menggunakan aplikasi mobile.
+            </p>
+          </div>
+        ) : (
+          <div className="mt-4 rounded-lg bg-blue-50 p-4 text-sm text-blue-800">
+            <p className="font-medium">Gunakan aplikasi mobile untuk aktivitas lapangan</p>
+            <ul className="mt-2 list-inside list-disc space-y-1 text-blue-700">
+              <li>Check-in / check-out dengan GPS & selfie</li>
+              <li>Scan checkpoint (NFC / QR)</li>
+              <li>Lihat riwayat & progres harian</li>
+            </ul>
+          </div>
+        )}
         <form action="/auth/signout" method="post" className="mt-4">
           <button
             type="submit"

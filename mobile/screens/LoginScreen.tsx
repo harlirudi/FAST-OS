@@ -42,14 +42,14 @@ export default function LoginScreen() {
           ) : (
             <>
               <Text style={styles.googleLogo}>G</Text>
-              <Text style={styles.googleText}>Masuk dengan Google</Text>
+              <Text style={styles.googleText}>Masuk / Daftar dengan Google</Text>
             </>
           )}
         </TouchableOpacity>
 
         {message ? <Text style={styles.message}>{message}</Text> : null}
 
-        <Text style={styles.footer}>Gunakan akun Google kantor untuk masuk.</Text>
+        <Text style={styles.footer}>Gunakan akun Google kantor untuk masuk atau mendaftar.</Text>
       </View>
     </KeyboardAvoidingView>
   );

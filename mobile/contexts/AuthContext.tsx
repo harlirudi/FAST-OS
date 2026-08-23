@@ -79,16 +79,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     // Buka browser untuk login Google, lalu kembali ke app
     const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
-    if (result.type !== "success" || !result.url) {
-      return result.type === "cancel" ? "Login dibatalkan" : "Gagal login Google";
-    }
 
     // Ambil kode dari URL redirect lalu tukar dengan session
-    const code = result.url.match(/[?&]code=([^&]+)/)?.[1];
-    if (!code) return "Tidak ada kode verifikasi dari Google";
-
-    const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-    if (exchangeError) return exchangeError.message;
+    const resultUrl = result.type === "success" ? result.url : undefined;
+    const code = resultUrl?.match(/[?&#]code=([^&]+)/)?.[1];
+    if (code) {
+      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+      if (exchangeError) return exchangeError.message;
+    } else {
+      // Browser tertutup tanpa kode — cek apakah session sudah terbentuk di server
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        return result.type === "cancel" ? "Login dibatalkan" : "Gagal login Google";
+      }
+    }
 
     await refreshProfile();
     return null;

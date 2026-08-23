@@ -23,6 +23,7 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
   const [sites, setSites] = useState<Site[]>([]);
   const [loadingSites, setLoadingSites] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
 
   // Muat daftar site setiap dialog dibuka (hindari state stale)
   const handleOpenChange = (next: boolean) => {
@@ -42,11 +43,14 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
 
   const handleSubmit = async (formData: FormData) => {
     setSaving(true);
+    setSaveError("");
     const result = await updateUserRole(user.id, formData);
     setSaving(false);
     if (result.success) {
       setOpen(false);
       onSaved();
+    } else {
+      setSaveError(result.message || "Gagal menyimpan perubahan.");
     }
   };
 
@@ -74,6 +78,11 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
           <Button type="submit" disabled={saving}>
             {saving ? "Menyimpan..." : "Simpan"}
           </Button>
+          {saveError && (
+            <p className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+              {saveError}
+            </p>
+          )}
         </form>
       </DialogContent>
     </Dialog>
