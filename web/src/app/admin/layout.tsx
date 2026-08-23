@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { LayoutDashboard, Building2, MapPin, Users, Radio, LogOut } from "lucide-react";
+import { Toaster } from "@/components/ui/toast";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export default function AdminLayout({
         </div>
       </aside>
       <main className="flex-1 overflow-auto p-8">{children}</main>
+      <Toaster />
     </div>
   );
 }

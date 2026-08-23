@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { toast } from "@/components/ui/toast";
 import { createClient } from "@/lib/supabase/client";
 import { updateUserRole, deleteUser } from "@/lib/supabase/user-actions";
 import { Pencil, Trash2 } from "lucide-react";
@@ -49,6 +50,11 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
     if (result.success) {
       setOpen(false);
       onSaved();
+      toast.add({
+        title: "Penugasan tersimpan",
+        description: "User akan otomatis masuk ke aplikasi dalam ≤30 detik.",
+        type: "success",
+      });
     } else {
       setSaveError(result.message || "Gagal menyimpan perubahan.");
     }

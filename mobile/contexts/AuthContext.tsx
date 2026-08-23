@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
+import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import * as WebBrowser from "expo-web-browser";
 import { makeRedirectUri } from "expo-auth-session";
@@ -59,7 +60,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       refreshProfile();
     });
 
-    return () => listener.subscription.unsubscribe();
+    // Refresh profil setiap kali app kembali ke foreground
+    // (misal admin baru saja menugaskan site dari web)
+    const appStateSub = AppState.addEventListener("change", (state) => {
+      if (state === "active") refreshProfile();
+    });
+
+    return () => {
+      listener.subscription.unsubscribe();
+      appStateSub.remove();
+    };
   }, [refreshProfile]);
 
   const signInWithGoogle = async () => {

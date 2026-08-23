@@ -1,9 +1,27 @@
-import React from "react";
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator } from "react-native";
 import { useAuth } from "../contexts/AuthContext";
 
+const POLL_INTERVAL_MS = 30_000;
+
 export default function WaitingAssignmentScreen() {
-  const { user, signOut } = useAuth();
+  const { user, refreshProfile, signOut } = useAuth();
+  const [lastChecked, setLastChecked] = useState<Date | null>(null);
+  const [checking, setChecking] = useState(false);
+
+  const check = async () => {
+    setChecking(true);
+    await refreshProfile();
+    setLastChecked(new Date());
+    setChecking(false);
+  };
+
+  useEffect(() => {
+    check();
+    const interval = setInterval(check, POLL_INTERVAL_MS);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <View style={styles.container}>
@@ -15,10 +33,31 @@ export default function WaitingAssignmentScreen() {
         </Text>
         <Text style={styles.text}>
           Hubungi supervisor atau admin untuk penugasan. Setelah ditugaskan,
-          layar ini akan berubah otomatis.
+          aplikasi ini akan membuka layar kerja secara otomatis.
         </Text>
 
         <Text style={styles.email}>{user?.email}</Text>
+
+        <TouchableOpacity
+          style={styles.checkBtn}
+          onPress={check}
+          disabled={checking}
+        >
+          {checking ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.checkBtnText}>Periksa Sekarang</Text>
+          )}
+        </TouchableOpacity>
+
+        <Text style={styles.lastChecked}>
+          {lastChecked
+            ? `Terakhir diperiksa ${lastChecked.toLocaleTimeString("id-ID", {
+                hour: "2-digit",
+                minute: "2-digit",
+              })} — diperiksa otomatis tiap 30 detik`
+            : "Memeriksa status penugasan..."}
+        </Text>
 
         <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
           <Text style={styles.signOutText}>Keluar</Text>
@@ -68,6 +107,24 @@ const styles = StyleSheet.create({
     color: "#9ca3af",
     marginTop: 12,
     marginBottom: 24,
+  },
+  checkBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    backgroundColor: "#2563eb",
+  },
+  checkBtnText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "600",
+  },
+  lastChecked: {
+    fontSize: 11,
+    color: "#9ca3af",
+    marginTop: 10,
+    marginBottom: 24,
+    textAlign: "center",
   },
   signOutBtn: {
     paddingVertical: 12,

@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
+import AutoRefresh from "@/components/dashboard/auto-refresh";
 
 export default async function DashboardPage() {
   const supabase = await createClient();
@@ -44,6 +45,10 @@ export default async function DashboardPage() {
               Hubungi supervisor atau admin untuk penugasan. Setelah ditugaskan,
               kamu bisa langsung menggunakan aplikasi mobile.
             </p>
+            <p className="mt-4 text-xs text-amber-600">
+              Halaman ini diperbarui otomatis setiap 30 detik.
+            </p>
+            <AutoRefresh />
           </div>
         ) : (
           <div className="mt-4 rounded-lg bg-blue-50 p-4 text-sm text-blue-800">
