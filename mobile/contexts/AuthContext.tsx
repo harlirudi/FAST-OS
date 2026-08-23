@@ -2,7 +2,17 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
 import * as Linking from "expo-linking";
+import {
+  GoogleSignin,
+  isErrorWithCode,
+  statusCodes,
+} from "@react-native-google-signin/google-signin";
 import { supabase } from "../lib/supabase";
+import { GOOGLE_WEB_CLIENT_ID } from "../lib/google-config";
+
+GoogleSignin.configure({
+  webClientId: GOOGLE_WEB_CLIENT_ID,
+});
 
 type AuthContextType = {
   session: Session | null;
@@ -17,40 +27,6 @@ type AuthContextType = {
 };
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
-
-const AUTH_TIMEOUT_MS = 60_000;
-
-// Buka URL OAuth di browser lalu tunggu deep link balik ke app.
-// Lebih andal daripada openAuthSessionAsync di build standalone Android
-// (Chrome Custom Tab sering gagal menyerahkan hasil kembali ke app).
-function waitForAuthCallback(authUrl: string): Promise<string | null> {
-  return new Promise((resolve) => {
-    let settled = false;
-    let subscription: { remove: () => void } | null = null;
-    let timer: ReturnType<typeof setTimeout> | null = null;
-
-    const finish = (url: string | null) => {
-      if (settled) return;
-      settled = true;
-      if (timer) clearTimeout(timer);
-      subscription?.remove();
-      resolve(url);
-    };
-
-    subscription = Linking.addEventListener("url", (event) => {
-      finish(event.url);
-    });
-
-    // App mungkin di-kill Android lalu dibuka ulang oleh deep link
-    Linking.getInitialURL().then((url) => {
-      if (url && /[?&#]code=/.test(url)) finish(url);
-    });
-
-    Linking.openURL(authUrl).catch(() => finish(null));
-
-    timer = setTimeout(() => finish(null), AUTH_TIMEOUT_MS);
-  });
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -112,47 +88,43 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshProfile]);
 
   const signInWithGoogle = async () => {
-    // Standalone APK: pakai App Link https (Android intercept URL ini ke app).
-    // Custom scheme (facilityos://) diblokir Chrome saat redirect dari browser.
-    // Dev client (Metro): pakai scheme facilityos seperti biasa.
-    const redirectUri = __DEV__
-      ? Linking.createURL("auth/callback")
-      : "https://web-chi-cyan-20.vercel.app/auth/callback";
-    const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: redirectUri,
-        skipBrowserRedirect: true,
-      },
-    });
-    if (error) return error.message;
-    if (!data?.url) return "Tidak ada URL login Google";
+    // Native Google Sign-In (SDK Google, tanpa browser):
+    //   - bottom sheet pilih akun Google (ID token audience = WEB client ID, diterima Supabase)
+    //   - Play Services memvalidasi identitas app via Android OAuth client di Google Cloud
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (response.type === "cancelled") return "Login dibatalkan";
 
-    // Buka browser dan tunggu deep link balik (facilityos://auth/callback?code=...)
-    const callbackUrl = await waitForAuthCallback(data.url);
+      const idToken = response.data.idToken;
+      if (!idToken) return "Tidak ada ID token dari Google";
 
-    const code = callbackUrl?.match(/[?&#]code=([^&]+)/)?.[1];
-    if (code) {
-      const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError) {
-        // Kode mungkin sudah ditukar saat cold start — cek session dulu
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return exchangeError.message;
+      const { error } = await supabase.auth.signInWithIdToken({
+        provider: "google",
+        token: idToken,
+      });
+      if (error) return error.message;
+
+      await refreshProfile();
+      return null;
+    } catch (error) {
+      if (isErrorWithCode(error) && error.code === statusCodes.IN_PROGRESS) {
+        return "Login sedang berlangsung";
       }
-    } else {
-      // Tidak ada kode — cek apakah session sudah terbentuk di server
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        return "Login tidak selesai. Coba lagi — setelah memilih akun Google, tunggu sampai kembali ke aplikasi otomatis.";
+      if (isErrorWithCode(error) && error.code === statusCodes.PLAY_SERVICES_NOT_AVAILABLE) {
+        return "Google Play Services tidak tersedia di perangkat ini";
       }
+      return "Gagal login Google";
     }
-
-    await refreshProfile();
-    return null;
   };
 
   const signOut = async () => {
     await supabase.auth.signOut();
+    try {
+      await GoogleSignin.signOut();
+    } catch {
+      // abaikan — session Supabase sudah dihapus
+    }
   };
 
   return (

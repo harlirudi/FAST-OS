@@ -41,7 +41,10 @@
               "pathPrefix": "/auth/callback"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
@@ -51,7 +54,13 @@
     "plugins": [
       "expo-secure-store",
       "react-native-nfc-manager",
-      "expo-web-browser"
+      "expo-web-browser",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.424874598334-93696k6ja8cec2gpkngp6meo31nmmoti"
+        }
+      ]
     ],
     "extra": {
       "eas": {
