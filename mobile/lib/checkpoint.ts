@@ -1,6 +1,6 @@
 import { supabase, supabaseUrl } from "./supabase";
 import { isOnline, enqueue } from "./sync";
-import * as FileSystem from "expo-file-system";
+import * as FileSystem from "expo-file-system/legacy";
 
 export type CheckpointSession = {
   id: string;
