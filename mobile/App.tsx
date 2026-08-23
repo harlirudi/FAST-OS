@@ -25,8 +25,8 @@ function AppNavigator() {
   // Belum isi data diri (nama + HP) → onboarding
   if (!hasProfile) return <OnboardingScreen />;
 
-  // Sudah isi data diri tapi belum punya site (cleaner/supervisor) → menunggu
-  if (!hasSite && role !== "admin") return <WaitingAssignmentScreen />;
+  // Cleaner belum punya site → menunggu penugasan (dipantau otomatis tiap 30 detik)
+  if (role === "cleaner" && !hasSite) return <WaitingAssignmentScreen />;
 
   if (role === "cleaner") return <CleanerHomeScreen />;
   if (role === "supervisor") return <SupervisorDashboardScreen />;
