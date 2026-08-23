@@ -18,14 +18,34 @@ import type { ColumnDef } from "@tanstack/react-table";
 type User = { id: string; name: string; role: string; site_id: string | null; sites?: { name: string } | null };
 type Site = { id: string; name: string };
 
-function EditUserDialog({ user, sites }: { user: User; sites: Site[] }) {
+function EditUserDialog({ user }: { user: User }) {
+  const [open, setOpen] = useState(false);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [loadingSites, setLoadingSites] = useState(false);
+
+  // Muat daftar site setiap dialog dibuka (hindari state stale)
+  const handleOpenChange = (next: boolean) => {
+    setOpen(next);
+    if (next && sites.length === 0) {
+      setLoadingSites(true);
+      createClient()
+        .from("sites")
+        .select("id, name")
+        .order("name")
+        .then(({ data }) => {
+          setSites(data || []);
+          setLoadingSites(false);
+        });
+    }
+  };
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
         <Pencil className="h-3 w-3" />
       </DialogTrigger>
       <DialogContent>
-        <DialogHeader><DialogTitle>Edit Pengguna</DialogTitle></DialogHeader>
+        <DialogHeader><DialogTitle>Edit Pengguna — {user.name}</DialogTitle></DialogHeader>
         <form action={updateUserRole.bind(null, user.id)} className="space-y-3">
           <div><Label>Nama</Label><Input name="name" defaultValue={user.name} required /></div>
           <div><Label>Peran</Label>
@@ -33,8 +53,12 @@ function EditUserDialog({ user, sites }: { user: User; sites: Site[] }) {
               options={[{ value: "admin", label: "Admin" }, { value: "supervisor", label: "Supervisor" }, { value: "cleaner", label: "Cleaner" }]} />
           </div>
           <div><Label>Site</Label>
-            <FormSelect name="site_id" defaultValue={user.site_id ?? "none"}
-              options={[{ value: "none", label: "Tidak ada" }, ...sites.map((s) => ({ value: s.id, label: s.name }))]} />
+            {loadingSites ? (
+              <p className="rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-400">Memuat daftar site...</p>
+            ) : (
+              <FormSelect name="site_id" defaultValue={user.site_id ?? "none"}
+                options={[{ value: "none", label: "Tidak ada" }, ...sites.map((s) => ({ value: s.id, label: s.name }))]} />
+            )}
           </div>
           <Button type="submit">Simpan</Button>
         </form>
@@ -45,14 +69,11 @@ function EditUserDialog({ user, sites }: { user: User; sites: Site[] }) {
 
 export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
-  const [sites, setSites] = useState<Site[]>([]);
   const supabase = createClient();
 
   useEffect(() => {
     supabase.from("users").select("*, sites(name)").order("role").order("name")
       .then(({ data }) => setUsers(data || []));
-    supabase.from("sites").select("id, name")
-      .then(({ data }) => setSites(data || []));
   }, [supabase]);
 
   const columns: ColumnDef<User>[] = [
@@ -64,7 +85,7 @@ export default function UsersPage() {
     { accessorKey: "sites.name", header: "Site", cell: ({ row }) => row.original.sites?.name ?? "-" },
     { id: "actions", header: "Aksi", cell: ({ row }) => (
       <div className="flex gap-2">
-        <EditUserDialog user={row.original} sites={sites} />
+        <EditUserDialog user={row.original} />
         <form action={deleteUser.bind(null, row.original.id)}>
           <Button variant="destructive" size="sm" type="submit"><Trash2 className="h-3 w-3" /></Button>
         </form>
