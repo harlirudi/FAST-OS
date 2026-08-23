@@ -18,10 +18,11 @@ import type { ColumnDef } from "@tanstack/react-table";
 type User = { id: string; name: string; role: string; site_id: string | null; sites?: { name: string } | null };
 type Site = { id: string; name: string };
 
-function EditUserDialog({ user }: { user: User }) {
+function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) {
   const [open, setOpen] = useState(false);
   const [sites, setSites] = useState<Site[]>([]);
   const [loadingSites, setLoadingSites] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   // Muat daftar site setiap dialog dibuka (hindari state stale)
   const handleOpenChange = (next: boolean) => {
@@ -39,6 +40,16 @@ function EditUserDialog({ user }: { user: User }) {
     }
   };
 
+  const handleSubmit = async (formData: FormData) => {
+    setSaving(true);
+    const result = await updateUserRole(user.id, formData);
+    setSaving(false);
+    if (result.success) {
+      setOpen(false);
+      onSaved();
+    }
+  };
+
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
@@ -46,7 +57,7 @@ function EditUserDialog({ user }: { user: User }) {
       </DialogTrigger>
       <DialogContent>
         <DialogHeader><DialogTitle>Edit Pengguna — {user.name}</DialogTitle></DialogHeader>
-        <form action={updateUserRole.bind(null, user.id)} className="space-y-3">
+        <form action={handleSubmit} className="space-y-3">
           <div><Label>Nama</Label><Input name="name" defaultValue={user.name} required /></div>
           <div><Label>Peran</Label>
             <FormSelect name="role" defaultValue={user.role}
@@ -60,7 +71,9 @@ function EditUserDialog({ user }: { user: User }) {
                 options={[{ value: "none", label: "Tidak ada" }, ...sites.map((s) => ({ value: s.id, label: s.name }))]} />
             )}
           </div>
-          <Button type="submit">Simpan</Button>
+          <Button type="submit" disabled={saving}>
+            {saving ? "Menyimpan..." : "Simpan"}
+          </Button>
         </form>
       </DialogContent>
     </Dialog>
@@ -71,9 +84,13 @@ export default function UsersPage() {
   const [users, setUsers] = useState<User[]>([]);
   const supabase = createClient();
 
-  useEffect(() => {
+  const loadUsers = () => {
     supabase.from("users").select("*, sites(name)").order("role").order("name")
       .then(({ data }) => setUsers(data || []));
+  };
+
+  useEffect(() => {
+    loadUsers();
   }, [supabase]);
 
   const columns: ColumnDef<User>[] = [
@@ -85,7 +102,7 @@ export default function UsersPage() {
     { accessorKey: "sites.name", header: "Site", cell: ({ row }) => row.original.sites?.name ?? "-" },
     { id: "actions", header: "Aksi", cell: ({ row }) => (
       <div className="flex gap-2">
-        <EditUserDialog user={row.original} />
+        <EditUserDialog user={row.original} onSaved={loadUsers} />
         <form action={deleteUser.bind(null, row.original.id)}>
           <Button variant="destructive" size="sm" type="submit"><Trash2 className="h-3 w-3" /></Button>
         </form>

@@ -2,12 +2,11 @@
 
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 export async function updateUserRole(userId: string, formData: FormData) {
   const supabase = await createClient();
   const siteId = formData.get("site_id") as string;
-  await supabase
+  const { error } = await supabase
     .from("users")
     .update({
       role: formData.get("role") as string,
@@ -16,7 +15,7 @@ export async function updateUserRole(userId: string, formData: FormData) {
     })
     .eq("id", userId);
   revalidatePath("/admin/users");
-  redirect("/admin/users");
+  return { success: !error, message: error?.message ?? null };
 }
 
 export async function deleteUser(userId: string) {
