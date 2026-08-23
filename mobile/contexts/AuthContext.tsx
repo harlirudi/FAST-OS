@@ -1,11 +1,8 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from "react";
 import { AppState } from "react-native";
 import { Session, User } from "@supabase/supabase-js";
-import * as WebBrowser from "expo-web-browser";
-import { makeRedirectUri } from "expo-auth-session";
+import * as Linking from "expo-linking";
 import { supabase } from "../lib/supabase";
-
-WebBrowser.maybeCompleteAuthSession();
 
 type AuthContextType = {
   session: Session | null;
@@ -20,6 +17,40 @@ type AuthContextType = {
 };
 
 const AuthContext = createContext<AuthContextType>({} as AuthContextType);
+
+const AUTH_TIMEOUT_MS = 180_000;
+
+// Buka URL OAuth di browser lalu tunggu deep link balik ke app.
+// Lebih andal daripada openAuthSessionAsync di build standalone Android
+// (Chrome Custom Tab sering gagal menyerahkan hasil kembali ke app).
+function waitForAuthCallback(authUrl: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let subscription: { remove: () => void } | null = null;
+    let timer: ReturnType<typeof setTimeout> | null = null;
+
+    const finish = (url: string | null) => {
+      if (settled) return;
+      settled = true;
+      if (timer) clearTimeout(timer);
+      subscription?.remove();
+      resolve(url);
+    };
+
+    subscription = Linking.addEventListener("url", (event) => {
+      finish(event.url);
+    });
+
+    // App mungkin di-kill Android lalu dibuka ulang oleh deep link
+    Linking.getInitialURL().then((url) => {
+      if (url && /[?&#]code=/.test(url)) finish(url);
+    });
+
+    Linking.openURL(authUrl).catch(() => finish(null));
+
+    timer = setTimeout(() => finish(null), AUTH_TIMEOUT_MS);
+  });
+}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -48,6 +79,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
+    // Deep link saat cold start (Android bisa meng-kill app saat login Google)
+    Linking.getInitialURL().then((url) => {
+      const code = url?.match(/[?&#]code=([^&]+)/)?.[1];
+      if (code) {
+        supabase.auth.exchangeCodeForSession(code).then(() => refreshProfile());
+      }
+    });
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
@@ -73,10 +112,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [refreshProfile]);
 
   const signInWithGoogle = async () => {
-    const redirectUri = makeRedirectUri({
-      scheme: "facilityos",
-      path: "auth/callback",
-    });
+    const redirectUri = Linking.createURL("auth/callback");
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
@@ -87,20 +123,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (error) return error.message;
     if (!data?.url) return "Tidak ada URL login Google";
 
-    // Buka browser untuk login Google, lalu kembali ke app
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUri);
+    // Buka browser dan tunggu deep link balik (facilityos://auth/callback?code=...)
+    const callbackUrl = await waitForAuthCallback(data.url);
 
-    // Ambil kode dari URL redirect lalu tukar dengan session
-    const resultUrl = result.type === "success" ? result.url : undefined;
-    const code = resultUrl?.match(/[?&#]code=([^&]+)/)?.[1];
+    const code = callbackUrl?.match(/[?&#]code=([^&]+)/)?.[1];
     if (code) {
       const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-      if (exchangeError) return exchangeError.message;
+      if (exchangeError) {
+        // Kode mungkin sudah ditukar saat cold start — cek session dulu
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) return exchangeError.message;
+      }
     } else {
-      // Browser tertutup tanpa kode — cek apakah session sudah terbentuk di server
+      // Tidak ada kode — cek apakah session sudah terbentuk di server
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
-        return result.type === "cancel" ? "Login dibatalkan" : "Gagal login Google";
+        return "Login tidak selesai. Coba lagi — setelah memilih akun Google, tunggu sampai kembali ke aplikasi otomatis.";
       }
     }
 
