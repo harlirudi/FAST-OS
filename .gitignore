@@ -14,6 +14,7 @@ scripts/psql.sh
 *.key
 *.p8
 *.keystore
+!mobile/facilityos-release.keystore
 *.jks
 mobile/android/
 mobile/ios/
