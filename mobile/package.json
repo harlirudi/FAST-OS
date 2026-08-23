@@ -40,6 +40,13 @@
     "web": "expo start --web",
     "test": "jest"
   },
+  "expo": {
+    "doctor": {
+      "reactNativeDirectoryCheck": {
+        "exclude": ["react-native-nfc-manager"]
+      }
+    }
+  },
   "jest": {
     "preset": "jest-expo",
     "transformIgnorePatterns": [
