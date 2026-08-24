@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
 import { createCheckpoint, updateCheckpoint, deleteCheckpoint, refreshCheckpointQr, pairNfcTag } from "@/lib/supabase/checkpoint-actions";
+import { LocationSearch } from "@/components/admin/location-search";
 import { Pencil, Trash2, Plus, QrCode, Radio } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -65,6 +66,8 @@ function QrDialog({ checkpoint }: { checkpoint: Checkpoint }) {
 }
 
 function EditDialog({ checkpoint }: { checkpoint: Checkpoint }) {
+  const [lat, setLat] = useState(checkpoint.latitude.toString());
+  const [lng, setLng] = useState(checkpoint.longitude.toString());
   return (
     <Dialog>
       <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
@@ -75,8 +78,14 @@ function EditDialog({ checkpoint }: { checkpoint: Checkpoint }) {
         <form action={updateCheckpoint.bind(null, checkpoint.id)} className="space-y-3">
           <div><Label>Nama</Label><Input name="name" defaultValue={checkpoint.name} required /></div>
           <input type="hidden" name="site_id" value={checkpoint.site_id} />
-          <div><Label>Latitude</Label><Input name="latitude" type="number" step="any" defaultValue={checkpoint.latitude} required /></div>
-          <div><Label>Longitude</Label><Input name="longitude" type="number" step="any" defaultValue={checkpoint.longitude} required /></div>
+          <div>
+            <Label>Koordinat — cari nama tempat, atau isi manual</Label>
+            <LocationSearch onPick={(la, ln) => { setLat(String(la)); setLng(String(ln)); }} />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1"><Label>Latitude</Label><Input name="latitude" type="number" step="any" value={lat} onChange={(e) => setLat(e.target.value)} required /></div>
+            <div className="flex-1"><Label>Longitude</Label><Input name="longitude" type="number" step="any" value={lng} onChange={(e) => setLng(e.target.value)} required /></div>
+          </div>
           <div><Label>Urutan Tampilan</Label><Input name="display_order" type="number" defaultValue={checkpoint.display_order} /></div>
           <Button type="submit">Simpan</Button>
         </form>
@@ -104,6 +113,38 @@ function PairNfcDialog({ checkpoint }: { checkpoint: Checkpoint }) {
             Biasanya tertera di badan tag NFC. Kalau tag tidak menunjukkan ID-nya, pasang via
             mobile supervisor (tap tag — ID terbaca otomatis).
           </p>
+          <Button type="submit">Simpan</Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function CreateCheckpointDialog({ sites }: { sites: Site[] }) {
+  const [lat, setLat] = useState("");
+  const [lng, setLng] = useState("");
+  return (
+    <Dialog>
+      <DialogTrigger className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
+        <Plus className="mr-2 inline h-4 w-4" />Tambah Checkpoint
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Tambah Checkpoint Baru</DialogTitle></DialogHeader>
+        <form action={createCheckpoint} className="space-y-3">
+          <div><Label>Site</Label>
+            <FormSelect name="site_id" required placeholder="Pilih site"
+              options={sites.map((s) => ({ value: s.id, label: s.name }))} />
+          </div>
+          <div><Label>Nama</Label><Input name="name" placeholder="Toilet Lt. 1" required /></div>
+          <div>
+            <Label>Koordinat — cari nama tempat, atau isi manual</Label>
+            <LocationSearch onPick={(la, ln) => { setLat(String(la)); setLng(String(ln)); }} />
+          </div>
+          <div className="flex gap-2">
+            <div className="flex-1"><Label>Latitude</Label><Input name="latitude" type="number" step="any" placeholder="-6.2088" value={lat} onChange={(e) => setLat(e.target.value)} required /></div>
+            <div className="flex-1"><Label>Longitude</Label><Input name="longitude" type="number" step="any" placeholder="106.8456" value={lng} onChange={(e) => setLng(e.target.value)} required /></div>
+          </div>
+          <div><Label>Urutan Tampilan</Label><Input name="display_order" type="number" defaultValue={0} /></div>
           <Button type="submit">Simpan</Button>
         </form>
       </DialogContent>
@@ -157,25 +198,7 @@ export default function CheckpointsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Kelola Checkpoint</h2>
-        <Dialog>
-          <DialogTrigger className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
-            <Plus className="mr-2 inline h-4 w-4" />Tambah Checkpoint
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader><DialogTitle>Tambah Checkpoint Baru</DialogTitle></DialogHeader>
-            <form action={createCheckpoint} className="space-y-3">
-              <div><Label>Site</Label>
-                <FormSelect name="site_id" required placeholder="Pilih site"
-                  options={sites.map((s) => ({ value: s.id, label: s.name }))} />
-              </div>
-              <div><Label>Nama</Label><Input name="name" placeholder="Toilet Lt. 1" required /></div>
-              <div><Label>Latitude</Label><Input name="latitude" type="number" step="any" placeholder="-6.2088" required /></div>
-              <div><Label>Longitude</Label><Input name="longitude" type="number" step="any" placeholder="106.8456" required /></div>
-              <div><Label>Urutan Tampilan</Label><Input name="display_order" type="number" defaultValue={0} /></div>
-              <Button type="submit">Simpan</Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <CreateCheckpointDialog sites={sites} />
       </div>
       <DataTable columns={columns} data={checkpoints} />
     </div>
