@@ -60,12 +60,20 @@ export default function QrBackupScreen({ onDone }: { onDone: () => void }) {
       });
     }, 1000);
 
-    const autoRefresh = setInterval(() => {
-      setToken(buildToken(selected.id));
-      setSecondsLeft(totalSec);
-    }, (totalSec - 60) * 1000); // refresh 1 menit sebelum expire
+    // Auto-refresh 1 menit sebelum expire — HANYA kalau masa berlaku > 1 menit
+    // (kalau 1 menit, interval jadi 0ms → QR berubah tiap detik!)
+    let autoRefresh: ReturnType<typeof setInterval> | null = null;
+    if (totalSec > 60) {
+      autoRefresh = setInterval(() => {
+        setToken(buildToken(selected.id));
+        setSecondsLeft(totalSec);
+      }, (totalSec - 60) * 1000);
+    }
 
-    return () => { clearInterval(countdown); clearInterval(autoRefresh); };
+    return () => {
+      clearInterval(countdown);
+      if (autoRefresh) clearInterval(autoRefresh);
+    };
   }, [selected?.id, validityMinutes]);
 
   if (loading) {

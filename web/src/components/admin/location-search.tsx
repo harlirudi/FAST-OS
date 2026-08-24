@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Search } from "lucide-react";
+import { Search, MapPin } from "lucide-react";
 
 type GeocodeResult = {
   lat: string;
@@ -9,13 +9,26 @@ type GeocodeResult = {
   display_name: string;
 };
 
-// Pencarian lokasi via Nominatim (OpenStreetMap) — gratis tanpa API key.
-// Hasil dipilih → koordinat dikirim balik ke form via onPick(lat, lng).
+// Mengambil koordinat dari link Google Maps (Share → Copy link):
+//   https://maps.google.com/?q=-6.8712,107.5903
+//   https://www.google.com/maps/@-6.8712,107.5903,17z
+function parseGoogleMapsLink(url: string): { lat: number; lng: number } | null {
+  const at = url.match(/@(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (at) return { lat: parseFloat(at[1]), lng: parseFloat(at[2]) };
+  const q = url.match(/[?&]q=(-?\d+\.\d+),(-?\d+\.\d+)/);
+  if (q) return { lat: parseFloat(q[1]), lng: parseFloat(q[2]) };
+  return null;
+}
+
+// Pencarian lokasi:
+//   1) Cari nama tempat via Nominatim (OpenStreetMap) — cakupan terbatas di Indonesia
+//   2) Buka Google Maps → cari → Share → Copy link → tempel di bawah → koordinat terisi
 export function LocationSearch({ onPick }: { onPick: (lat: number, lng: number) => void }) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<GeocodeResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState("");
+  const [mapsLink, setMapsLink] = useState("");
 
   const search = async () => {
     if (!query.trim()) return;
@@ -29,12 +42,27 @@ export function LocationSearch({ onPick }: { onPick: (lat: number, lng: number) 
       if (!res.ok) throw new Error("Gagal mencari lokasi");
       const data = (await res.json()) as GeocodeResult[];
       setResults(data);
-      if (data.length === 0) setError("Lokasi tidak ditemukan. Coba kata kunci lain.");
+      if (data.length === 0) {
+        setError(
+          "Tidak ditemukan di peta OpenStreetMap. Gunakan tombol 'Buka Google Maps' — tempat kecil seperti kafe/warung biasanya hanya ada di Google Maps."
+        );
+      }
     } catch (e: any) {
       setError(e?.message || "Gagal mencari lokasi");
     } finally {
       setSearching(false);
     }
+  };
+
+  const openGoogleMaps = () => {
+    const q = encodeURIComponent(query.trim() || "lokasi");
+    window.open(`https://www.google.com/maps/search/${q}`, "_blank");
+  };
+
+  const handleMapsLink = (link: string) => {
+    setMapsLink(link);
+    const parsed = parseGoogleMapsLink(link.trim());
+    if (parsed) onPick(parsed.lat, parsed.lng);
   };
 
   return (
@@ -56,6 +84,13 @@ export function LocationSearch({ onPick }: { onPick: (lat: number, lng: number) 
         >
           <Search className="mr-1 inline h-3.5 w-3.5" />
           {searching ? "Mencari..." : "Cari"}
+        </button>
+        <button
+          type="button"
+          onClick={openGoogleMaps}
+          className="rounded-md bg-blue-600 px-3 py-2 text-sm font-medium text-white hover:bg-blue-700"
+        >
+          <MapPin className="mr-1 inline h-3.5 w-3.5" />Google Maps
         </button>
       </div>
 
@@ -82,7 +117,19 @@ export function LocationSearch({ onPick }: { onPick: (lat: number, lng: number) 
       )}
 
       {error && <p className="text-xs text-red-600">{error}</p>}
-      <p className="text-[10px] text-gray-400">Geocoding © OpenStreetMap contributors</p>
+
+      <div>
+        <p className="text-[10px] text-gray-500">
+          Lewat Google Maps: buka tab baru → cari tempat → <b>Share → Copy link</b> → tempel di bawah.
+        </p>
+        <input
+          type="text"
+          value={mapsLink}
+          onChange={(e) => handleMapsLink(e.target.value)}
+          placeholder="https://www.google.com/maps/@-6.8712,107.5903,17z ..."
+          className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2 text-sm shadow-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+        />
+      </div>
     </div>
   );
 }
