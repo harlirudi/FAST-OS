@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView,
-  ActivityIndicator, Alert, FlatList, TextInput, Modal, Image,
+  ActivityIndicator, Alert, FlatList, TextInput, Modal, Image, RefreshControl,
 } from "react-native";
 import * as Location from "expo-location";
 import { useAuth } from "../contexts/AuthContext";
@@ -16,12 +16,13 @@ import QrBackupScreen from "./QrBackupScreen";
 import SetSiteLocationScreen from "./SetSiteLocationScreen";
 import AddCheckpointScreen from "./AddCheckpointScreen";
 
-type Tab = "team" | "inspections" | "overrides" | "photos";
+type Tab = "team" | "inspections" | "overrides" | "photos" | "setup";
 
 export default function SupervisorDashboardScreen() {
   const { user, signOut } = useAuth();
   const [tab, setTab] = useState<Tab>("team");
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [siteId, setSiteId] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [overrides, setOverrides] = useState<OverrideEvent[]>([]);
@@ -36,12 +37,12 @@ export default function SupervisorDashboardScreen() {
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [pendingScan, setPendingScan] = useState<{ id: string; mode: "nfc" | "qr" } | null>(null);
 
-  const loadData = useCallback(async () => {
-    setLoading(true);
+  const loadData = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     const { data: dbUser } = await supabase
       .from("users").select("id, site_id").eq("auth_id", user!.id).single();
 
-    if (!dbUser?.site_id) { setLoading(false); return; }
+    if (!dbUser?.site_id) { if (!silent) setLoading(false); return; }
     setSiteId(dbUser.site_id);
 
     const [teamData, overridesData, photosData, inspectionsData] = await Promise.all([
@@ -54,10 +55,16 @@ export default function SupervisorDashboardScreen() {
     setOverrides(overridesData);
     setLastPhotos(photosData);
     setInspections(inspectionsData);
-    setLoading(false);
+    if (!silent) setLoading(false);
   }, [user]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  const onPullRefresh = async () => {
+    setRefreshing(true);
+    await loadData(true);
+    setRefreshing(false);
+  };
 
   const handleInspection = async (note?: string) => {
     if (!pendingScan) return;
@@ -137,28 +144,28 @@ export default function SupervisorDashboardScreen() {
     <View style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Dashboard Supervisor</Text>
-        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-          <TouchableOpacity onPress={() => setSetSiteLocationMode(true)}>
-            <Text style={styles.siteLocBtn}>Lokasi Site</Text>
-          </TouchableOpacity>
-          <TouchableOpacity onPress={signOut}>
-            <Text style={styles.logoutBtn}>Keluar</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity onPress={signOut}>
+          <Text style={styles.logoutBtn}>Keluar</Text>
+        </TouchableOpacity>
       </View>
 
       {/* Tabs */}
       <View style={styles.tabs}>
-        {(["team", "inspections", "overrides", "photos"] as Tab[]).map((t) => (
+        {(["team", "inspections", "overrides", "photos", "setup"] as Tab[]).map((t) => (
           <TouchableOpacity key={t} style={[styles.tab, tab === t && styles.tabActive]} onPress={() => setTab(t)}>
             <Text style={[styles.tabText, tab === t && styles.tabActiveText]}>
-              {t === "team" ? "Tim" : t === "inspections" ? "Inspeksi" : t === "overrides" ? "Override" : "Foto"}
+              {t === "team" ? "Tim" : t === "inspections" ? "Inspeksi" : t === "overrides" ? "Override" : t === "photos" ? "Foto" : "Setup"}
             </Text>
           </TouchableOpacity>
         ))}
       </View>
 
-      <ScrollView style={styles.content}>
+      <ScrollView
+        style={styles.content}
+        refreshControl={
+          <RefreshControl refreshing={refreshing} onRefresh={onPullRefresh} />
+        }
+      >
         {/* Team Tab */}
         {tab === "team" && (
           <View>
@@ -178,20 +185,11 @@ export default function SupervisorDashboardScreen() {
           </View>
         )}
 
-        {/* Inspections Tab */}
+        {/* Inspections Tab — fokus operasional */}
         {tab === "inspections" && (
           <View>
-            <TouchableOpacity style={styles.addCpBtn} onPress={() => setAddCheckpointMode(true)}>
-              <Text style={styles.inspectBtnText}>+ Checkpoint</Text>
-            </TouchableOpacity>
             <TouchableOpacity style={styles.inspectBtn} onPress={() => setScanMode(true)}>
               <Text style={styles.inspectBtnText}>Inspeksi Checkpoint</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.pairBtn} onPress={() => setPairingMode(true)}>
-              <Text style={styles.inspectBtnText}>Pasang NFC Tag</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.qrBackupBtn} onPress={() => setQrBackupMode(true)}>
-              <Text style={styles.inspectBtnText}>QR Backup</Text>
             </TouchableOpacity>
             {inspections.map((ins) => (
               <View key={ins.id} style={styles.card}>
@@ -237,6 +235,25 @@ export default function SupervisorDashboardScreen() {
             {lastPhotos.length === 0 && <Text style={styles.empty}>Belum ada foto</Text>}
           </View>
         )}
+
+        {/* Setup Tab — pengaturan site & checkpoint */}
+        {tab === "setup" && (
+          <View>
+            <Text style={styles.setupHint}>Pengaturan site & checkpoint untuk tim Anda.</Text>
+            <TouchableOpacity style={styles.addCpBtn} onPress={() => setAddCheckpointMode(true)}>
+              <Text style={styles.inspectBtnText}>+ Checkpoint</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.pairBtn} onPress={() => setPairingMode(true)}>
+              <Text style={styles.inspectBtnText}>Pasang NFC Tag</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.qrBackupBtn} onPress={() => setQrBackupMode(true)}>
+              <Text style={styles.inspectBtnText}>QR Backup</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.siteSetupBtn} onPress={() => setSetSiteLocationMode(true)}>
+              <Text style={styles.inspectBtnText}>Lokasi Site</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -248,7 +265,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 60, backgroundColor: "#fff" },
   title: { fontSize: 20, fontWeight: "bold", color: "#111827" },
   logoutBtn: { color: "#dc2626", fontSize: 14 },
-  siteLocBtn: { color: "#2563eb", fontSize: 14, fontWeight: "600" },
   tabs: { flexDirection: "row", backgroundColor: "#fff", paddingHorizontal: 20, paddingBottom: 4 },
   tab: { flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabActive: { borderBottomColor: "#2563eb" },
@@ -259,6 +275,8 @@ const styles = StyleSheet.create({
   addCpBtn: { backgroundColor: "#7c3aed", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   pairBtn: { backgroundColor: "#059669", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   qrBackupBtn: { backgroundColor: "#7c3aed", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
+  siteSetupBtn: { backgroundColor: "#0f766e", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
+  setupHint: { fontSize: 12, color: "#6b7280", marginBottom: 12 },
   inspectBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   card: { backgroundColor: "#fff", borderRadius: 10, padding: 14, marginBottom: 8 },
   cardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
