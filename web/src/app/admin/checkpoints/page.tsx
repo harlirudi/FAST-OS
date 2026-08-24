@@ -11,8 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { createClient } from "@/lib/supabase/client";
-import { createCheckpoint, updateCheckpoint, deleteCheckpoint, refreshCheckpointQr } from "@/lib/supabase/checkpoint-actions";
-import { Pencil, Trash2, Plus, QrCode } from "lucide-react";
+import { createCheckpoint, updateCheckpoint, deleteCheckpoint, refreshCheckpointQr, pairNfcTag } from "@/lib/supabase/checkpoint-actions";
+import { Pencil, Trash2, Plus, QrCode, Radio } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 type Checkpoint = {
@@ -85,6 +85,32 @@ function EditDialog({ checkpoint }: { checkpoint: Checkpoint }) {
   );
 }
 
+// Fallback manual: admin memasukkan ID tag NFC (misal tertera di fisik tag).
+// Flow utama pairing tetap via mobile supervisor (tap tag + GPS otomatis).
+function PairNfcDialog({ checkpoint }: { checkpoint: Checkpoint }) {
+  return (
+    <Dialog>
+      <DialogTrigger className="rounded-lg border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium hover:bg-gray-100">
+        <Radio className="mr-1 inline h-3 w-3" />Pasang NFC
+      </DialogTrigger>
+      <DialogContent>
+        <DialogHeader><DialogTitle>Pasang NFC Tag — {checkpoint.name}</DialogTitle></DialogHeader>
+        <form action={pairNfcTag.bind(null, checkpoint.id)} className="space-y-3">
+          <div>
+            <Label>NFC Tag ID</Label>
+            <Input name="nfc_tag_id" placeholder="04A1B2C3D4E5F6" defaultValue={checkpoint.nfc_tag_id ?? ""} required />
+          </div>
+          <p className="text-xs text-gray-500">
+            Biasanya tertera di badan tag NFC. Kalau tag tidak menunjukkan ID-nya, pasang via
+            mobile supervisor (tap tag — ID terbaca otomatis).
+          </p>
+          <Button type="submit">Simpan</Button>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function CheckpointsPage() {
   const [checkpoints, setCheckpoints] = useState<Checkpoint[]>([]);
   const [sites, setSites] = useState<Site[]>([]);
@@ -118,6 +144,7 @@ export default function CheckpointsPage() {
       cell: ({ row }) => (
         <div className="flex gap-2">
           <EditDialog checkpoint={row.original} />
+          <PairNfcDialog checkpoint={row.original} />
           <form action={deleteCheckpoint.bind(null, row.original.id)}>
             <Button variant="destructive" size="sm" type="submit"><Trash2 className="h-3 w-3" /></Button>
           </form>

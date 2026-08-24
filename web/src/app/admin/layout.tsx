@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { LayoutDashboard, Building2, MapPin, Users, Radio, LogOut } from "lucide-react";
+import { LayoutDashboard, Building2, MapPin, Users, LogOut } from "lucide-react";
 import { Toaster } from "@/components/ui/toast";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +14,6 @@ export default function AdminLayout({
     { href: "/admin/sites", label: "Site", icon: Building2 },
     { href: "/admin/checkpoints", label: "Checkpoint", icon: MapPin },
     { href: "/admin/users", label: "Pengguna", icon: Users },
-    { href: "/admin/nfc", label: "NFC Pairing", icon: Radio },
   ];
 
   return (
