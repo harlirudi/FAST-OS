@@ -14,6 +14,7 @@ import CheckpointScanScreen from "./CheckpointScanScreen";
 import NfcPairingScreen from "./NfcPairingScreen";
 import QrBackupScreen from "./QrBackupScreen";
 import SetSiteLocationScreen from "./SetSiteLocationScreen";
+import AddCheckpointScreen from "./AddCheckpointScreen";
 
 type Tab = "team" | "inspections" | "overrides" | "photos";
 
@@ -30,6 +31,7 @@ export default function SupervisorDashboardScreen() {
   const [pairingMode, setPairingMode] = useState(false);
   const [qrBackupMode, setQrBackupMode] = useState(false);
   const [setSiteLocationMode, setSetSiteLocationMode] = useState(false);
+  const [addCheckpointMode, setAddCheckpointMode] = useState(false);
   const [inspectNote, setInspectNote] = useState("");
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [pendingScan, setPendingScan] = useState<{ id: string; mode: "nfc" | "qr" } | null>(null);
@@ -84,6 +86,10 @@ export default function SupervisorDashboardScreen() {
 
   if (setSiteLocationMode) {
     return <SetSiteLocationScreen onDone={() => setSetSiteLocationMode(false)} />;
+  }
+
+  if (addCheckpointMode) {
+    return <AddCheckpointScreen onDone={() => { setAddCheckpointMode(false); loadData(); }} />;
   }
 
   if (scanMode) {
@@ -175,6 +181,9 @@ export default function SupervisorDashboardScreen() {
         {/* Inspections Tab */}
         {tab === "inspections" && (
           <View>
+            <TouchableOpacity style={styles.addCpBtn} onPress={() => setAddCheckpointMode(true)}>
+              <Text style={styles.inspectBtnText}>+ Checkpoint</Text>
+            </TouchableOpacity>
             <TouchableOpacity style={styles.inspectBtn} onPress={() => setScanMode(true)}>
               <Text style={styles.inspectBtnText}>Inspeksi Checkpoint</Text>
             </TouchableOpacity>
@@ -247,6 +256,7 @@ const styles = StyleSheet.create({
   tabActiveText: { color: "#2563eb", fontWeight: "600" },
   content: { flex: 1, padding: 20 },
   inspectBtn: { backgroundColor: "#2563eb", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
+  addCpBtn: { backgroundColor: "#7c3aed", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   pairBtn: { backgroundColor: "#059669", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   qrBackupBtn: { backgroundColor: "#7c3aed", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   inspectBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
