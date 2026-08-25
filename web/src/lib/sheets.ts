@@ -12,9 +12,24 @@ function base64url(input: string | Buffer): string {
   return Buffer.from(input).toString("base64url");
 }
 
+// Key disimpan sebagai BASE64 (GOOGLE_SHEETS_PRIVATE_KEY_B64) agar bebas
+// masalah escaping newline di env var. Fallback: GOOGLE_SHEETS_PRIVATE_KEY
+// (literal \n diubah jadi newline).
+function resolvePrivateKey(): string {
+  const b64 = process.env.GOOGLE_SHEETS_PRIVATE_KEY_B64;
+  if (b64) {
+    return Buffer.from(b64, "base64").toString("utf8");
+  }
+  const raw = process.env.GOOGLE_SHEETS_PRIVATE_KEY ?? "";
+  return raw
+    .replace(/\\n/g, "\n")
+    .replace(/^"|"$/g, "")
+    .replace(/\\"/g, '"');
+}
+
 async function getAccessToken(): Promise<string> {
   const email = process.env.GOOGLE_SHEETS_CLIENT_EMAIL;
-  const key = process.env.GOOGLE_SHEETS_PRIVATE_KEY?.replace(/\\n/g, "\n");
+  const key = resolvePrivateKey();
   if (!email || !key) {
     throw new Error("Google Sheets belum dikonfigurasi (env service account).");
   }
