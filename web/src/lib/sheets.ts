@@ -63,7 +63,9 @@ async function getAccessToken(): Promise<string> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(`Gagal mendapatkan token Google Sheets (${res.status}): ${body.slice(0, 300)}`);
+    throw new Error(
+      `Gagal mendapatkan token Google Sheets (${res.status}): ${body.slice(0, 200)} | email="${email}" b64=${!!process.env.GOOGLE_SHEETS_PRIVATE_KEY_B64} spId="${process.env.GOOGLE_SHEETS_SPREADSHEET_ID}"`
+    );
   }
   const data = await res.json();
   return data.access_token as string;
