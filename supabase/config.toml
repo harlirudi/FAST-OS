@@ -418,3 +418,9 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 enabled = true
 verify_jwt = false
 cron = "0 3 * * *"
+
+# Sinkronisasi log -> Google Sheets tiap 30 menit
+[functions.sync-sheets]
+enabled = true
+verify_jwt = false
+cron = "*/30 * * * *"

@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic";
 
 import { useCallback, useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { appendToSheet } from "@/lib/sheets";
+import { syncToSheets } from "@/lib/sheets";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -150,67 +150,13 @@ export default function LogsPage() {
 
   const [exporting, setExporting] = useState(false);
 
-  const exportToSheets = async () => {
+  const syncNow = async () => {
     setExporting(true);
     try {
-      // Fetch semua baris sesuai filter (maks 5000) untuk export
-      const maxRows = 5000;
-      let header: string[];
-      let body: string[][];
-      if (tab === "attendance") {
-        let q = supabase
-          .from("attendance_logs")
-          .select("*, users(name), sites(name)")
-          .gte("timestamp", `${dateFrom}T00:00:00`)
-          .lte("timestamp", `${dateTo}T23:59:59`)
-          .order("timestamp", { ascending: false })
-          .limit(maxRows);
-        if (siteId !== "all") q = q.eq("site_id", siteId);
-        if (userId !== "all") q = q.eq("user_id", userId);
-        if (attType !== "all") q = q.eq("type", attType);
-        if (attFlagged === "yes") q = q.eq("is_flagged", true);
-        if (attFlagged === "no") q = q.eq("is_flagged", false);
-        const { data } = await q;
-        header = ["Diekspor", "Waktu", "User", "Site", "Tipe", "Jarak (m)", "Flag", "Alasan", "Foto"];
-        body = (data || []).map((r: any) => [
-          new Date().toLocaleString("id-ID"),
-          new Date(r.timestamp).toLocaleString("id-ID"),
-          r.users?.name ?? "-", r.sites?.name ?? "-",
-          r.type, String(r.distance_meters ?? ""),
-          r.is_flagged ? "Ya" : "Tidak", r.override_reason ?? "-",
-          r.check_in_photo_url || r.check_out_photo_url || "",
-        ]);
-        await appendToSheet("Absensi!A1", [header, ...body]);
-      } else {
-        let q = supabase
-          .from("checkpoint_logs")
-          .select("*, users(name), checkpoints(name, type), sites(name)")
-          .gte("created_at", `${dateFrom}T00:00:00`)
-          .lte("created_at", `${dateTo}T23:59:59`)
-          .order("created_at", { ascending: false })
-          .limit(maxRows);
-        if (siteId !== "all") q = q.eq("site_id", siteId);
-        if (userId !== "all") q = q.eq("user_id", userId);
-        if (cpId !== "all") q = q.eq("checkpoint_id", cpId);
-        if (cpStatus !== "all") q = q.eq("status", cpStatus);
-        const { data } = await q;
-        header = ["Diekspor", "Waktu", "User", "Site", "Checkpoint", "Jenis", "Status", "Durasi (mnt)", "Sebelum", "Sesudah", "Catatan"];
-        body = (data || []).map((r: any) => [
-          new Date().toLocaleString("id-ID"),
-          new Date(r.created_at).toLocaleString("id-ID"),
-          r.users?.name ?? "-", r.sites?.name ?? "-",
-          r.checkpoints?.name ?? "-", r.checkpoints?.type ?? "-",
-          r.status, String(r.duration_minutes ?? ""),
-          r.before_photo_url ?? "", r.after_photo_url ?? "",
-          r.inspection_note ?? r.note ?? "",
-        ]);
-        await appendToSheet("Checkpoint!A1", [header, ...body]);
-      }
-      alert(
-        `Berhasil ditulis ke Google Sheets (${body.length} baris) — tab "${tab === "attendance" ? "Absensi" : "Checkpoint"}".\nDokumentasi tersimpan di spreadsheet yang sudah di-share.`
-      );
+      const msg = await syncToSheets();
+      alert(msg);
     } catch (e: any) {
-      alert(`Gagal export ke Google Sheets: ${e?.message || "terjadi kesalahan"}`);
+      alert(`Gagal sinkron ke Google Sheets: ${e?.message || "terjadi kesalahan"}`);
     } finally {
       setExporting(false);
     }
@@ -222,9 +168,9 @@ export default function LogsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">Log</h2>
-        <Button variant="outline" size="sm" type="button" onClick={exportToSheets} disabled={exporting}>
+        <Button variant="outline" size="sm" type="button" onClick={syncNow} disabled={exporting}>
           <Download className="mr-1 h-3.5 w-3.5" />
-          {exporting ? "Mengekspor..." : "Export ke Google Sheets"}
+          {exporting ? "Menyinkronkan..." : "Sync ke Google Sheets"}
         </Button>
       </div>
 
