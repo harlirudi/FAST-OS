@@ -49,7 +49,7 @@ async function getAccessToken(): Promise<string> {
     signature = crypto.createSign("RSA-SHA256").update(signingInput).sign(key);
   } catch (e: any) {
     throw new Error(
-      `Sign gagal: b64=${!!process.env.GOOGLE_SHEETS_PRIVATE_KEY_B64} email=${!!email} keyLen=${key.length} head=${key.slice(0, 40)} :: ${e.message}`
+      `Sign gagal: b64=${!!process.env.GOOGLE_SHEETS_PRIVATE_KEY_B64} email="${email}" keyLen=${key.length} :: ${e.message}`
     );
   }
 
