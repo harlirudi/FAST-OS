@@ -61,7 +61,10 @@ async function getAccessToken(): Promise<string> {
       assertion: signingInput + "." + base64url(signature),
     }),
   });
-  if (!res.ok) throw new Error(`Gagal mendapatkan token Google Sheets (${res.status})`);
+  if (!res.ok) {
+    const body = await res.text();
+    throw new Error(`Gagal mendapatkan token Google Sheets (${res.status}): ${body.slice(0, 300)}`);
+  }
   const data = await res.json();
   return data.access_token as string;
 }
