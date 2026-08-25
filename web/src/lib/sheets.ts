@@ -44,7 +44,7 @@ async function getAccessToken(): Promise<string> {
     exp: now + 3600,
   };
   const signingInput = base64url(JSON.stringify(header)) + "." + base64url(JSON.stringify(claims));
-  let signature: string;
+  let signature: string | Buffer;
   try {
     signature = crypto.createSign("RSA-SHA256").update(signingInput).sign(key);
   } catch (e: any) {
