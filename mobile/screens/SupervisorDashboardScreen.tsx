@@ -169,19 +169,34 @@ export default function SupervisorDashboardScreen() {
         {/* Team Tab */}
         {tab === "team" && (
           <View>
-            {team.map((m) => (
-              <View key={m.id} style={styles.card}>
-                <View style={styles.cardRow}>
-                  <Text style={styles.cardName}>{m.name}</Text>
-                  <Text style={[styles.cardStatus, m.checkedIn ? styles.statusIn : styles.statusOut]}>
-                    {m.checkedIn ? "Check-in" : "Belum"}
+            {["cleaner", "security"].map((r) => {
+              const members = team.filter((m) => m.role === r);
+              return (
+                <View key={r} style={{ marginBottom: 16 }}>
+                  <Text style={styles.teamHeader}>
+                    {r === "cleaner" ? "Tim Cleaning" : "Tim Security"}
                   </Text>
+                  {members.map((m) => (
+                    <View key={m.id} style={styles.card}>
+                      <View style={styles.cardRow}>
+                        <Text style={styles.cardName}>{m.name}</Text>
+                        <Text style={[styles.cardStatus, m.checkedIn ? styles.statusIn : styles.statusOut]}>
+                          {m.checkedIn ? "Check-in" : "Belum"}
+                        </Text>
+                      </View>
+                      <Text style={styles.cardSub}>
+                        {m.completedCheckpoints}/{m.totalCheckpoints} checkpoint selesai
+                      </Text>
+                    </View>
+                  ))}
+                  {members.length === 0 && (
+                    <Text style={styles.empty}>
+                      Belum ada {r === "cleaner" ? "cleaner" : "security"} di site ini
+                    </Text>
+                  )}
                 </View>
-                <Text style={styles.cardSub}>
-                  {m.completedCheckpoints}/{m.totalCheckpoints} checkpoint selesai
-                </Text>
-              </View>
-            ))}
+              );
+            })}
           </View>
         )}
 
@@ -277,6 +292,7 @@ const styles = StyleSheet.create({
   qrBackupBtn: { backgroundColor: "#7c3aed", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   siteSetupBtn: { backgroundColor: "#0f766e", borderRadius: 10, padding: 14, alignItems: "center", marginBottom: 16 },
   setupHint: { fontSize: 12, color: "#6b7280", marginBottom: 12 },
+  teamHeader: { fontSize: 15, fontWeight: "700", color: "#111827", marginBottom: 8 },
   inspectBtnText: { color: "#fff", fontSize: 15, fontWeight: "600" },
   card: { backgroundColor: "#fff", borderRadius: 10, padding: 14, marginBottom: 8 },
   cardRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },

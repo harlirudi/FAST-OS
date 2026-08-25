@@ -71,7 +71,7 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
           <div><Label>Nama</Label><Input name="name" defaultValue={user.name} required /></div>
           <div><Label>Peran</Label>
             <FormSelect name="role" defaultValue={user.role}
-              options={[{ value: "admin", label: "Admin" }, { value: "supervisor", label: "Supervisor" }, { value: "cleaner", label: "Cleaner" }]} />
+              options={[{ value: "admin", label: "Admin" }, { value: "supervisor", label: "Supervisor" }, { value: "cleaner", label: "Cleaner" }, { value: "security", label: "Security" }]} />
           </div>
           <div><Label>Site</Label>
             {loadingSites ? (
@@ -117,7 +117,7 @@ export default function UsersPage() {
   const columns: ColumnDef<User>[] = [
     { accessorKey: "name", header: "Nama" },
     { accessorKey: "role", header: "Peran", cell: ({ row }) => {
-      const colors: Record<string, string> = { admin: "bg-purple-100 text-purple-800", supervisor: "bg-blue-100 text-blue-800", cleaner: "bg-green-100 text-green-800" };
+      const colors: Record<string, string> = { admin: "bg-purple-100 text-purple-800", supervisor: "bg-blue-100 text-blue-800", cleaner: "bg-green-100 text-green-800", security: "bg-amber-100 text-amber-800" };
       return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[row.original.role] || ""}`}>{row.original.role}</span>;
     }},
     { accessorKey: "sites.name", header: "Site", cell: ({ row }) => row.original.sites?.name ?? "-" },

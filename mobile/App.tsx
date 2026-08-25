@@ -26,10 +26,11 @@ function AppNavigator() {
   // Belum isi data diri (nama + HP) → onboarding
   if (!hasProfile) return <OnboardingScreen />;
 
-  // Cleaner belum punya site → menunggu penugasan (dipantau otomatis tiap 30 detik)
-  if (role === "cleaner" && !hasSite) return <WaitingAssignmentScreen />;
+  // Cleaner/security belum punya site → menunggu penugasan (dipantau otomatis tiap 30 detik)
+  if ((role === "cleaner" || role === "security") && !hasSite) return <WaitingAssignmentScreen />;
 
-  if (role === "cleaner") return <CleanerHomeScreen />;
+  if (role === "cleaner") return <CleanerHomeScreen checkpointType="cleaning" />;
+  if (role === "security") return <CleanerHomeScreen checkpointType="security" />;
   if (role === "supervisor") return <SupervisorDashboardScreen />;
   return <DashboardScreen />;
 }

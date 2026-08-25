@@ -19,6 +19,7 @@ import type { ColumnDef } from "@tanstack/react-table";
 type Checkpoint = {
   id: string; site_id: string; name: string; nfc_tag_id: string | null;
   qr_code_hash: string | null; qr_generation: number | null; display_order: number; latitude: number; longitude: number;
+  type: string;
   sites?: { name: string };
 };
 
@@ -78,6 +79,10 @@ function EditDialog({ checkpoint }: { checkpoint: Checkpoint }) {
         <form action={updateCheckpoint.bind(null, checkpoint.id)} className="space-y-3">
           <div><Label>Nama</Label><Input name="name" defaultValue={checkpoint.name} required /></div>
           <input type="hidden" name="site_id" value={checkpoint.site_id} />
+          <div><Label>Jenis</Label>
+            <FormSelect name="type" defaultValue={checkpoint.type}
+              options={[{ value: "cleaning", label: "Cleaning" }, { value: "security", label: "Security" }]} />
+          </div>
           <div>
             <Label>Koordinat — cari nama tempat, atau isi manual</Label>
             <LocationSearch onPick={(la, ln) => { setLat(String(la)); setLng(String(ln)); }} />
@@ -136,6 +141,10 @@ function CreateCheckpointDialog({ sites }: { sites: Site[] }) {
               options={sites.map((s) => ({ value: s.id, label: s.name }))} />
           </div>
           <div><Label>Nama</Label><Input name="name" placeholder="Toilet Lt. 1" required /></div>
+          <div><Label>Jenis</Label>
+            <FormSelect name="type" defaultValue="cleaning"
+              options={[{ value: "cleaning", label: "Cleaning" }, { value: "security", label: "Security" }]} />
+          </div>
           <div>
             <Label>Koordinat — cari nama tempat, atau isi manual</Label>
             <LocationSearch onPick={(la, ln) => { setLat(String(la)); setLng(String(ln)); }} />
@@ -167,6 +176,11 @@ export default function CheckpointsPage() {
   const columns: ColumnDef<Checkpoint>[] = [
     { accessorKey: "sites.name", header: "Site", cell: ({ row }) => row.original.sites?.name ?? "-" },
     { accessorKey: "name", header: "Nama Checkpoint" },
+    { accessorKey: "type", header: "Jenis", cell: ({ row }) => (
+      <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${row.original.type === "security" ? "bg-amber-100 text-amber-800" : "bg-green-100 text-green-800"}`}>
+        {row.original.type}
+      </span>
+    )},
     { accessorKey: "display_order", header: "Urutan" },
     { accessorKey: "nfc_tag_id", header: "NFC Tag", cell: ({ row }) => row.original.nfc_tag_id || "Belum dipasang" },
     { accessorKey: "latitude", header: "Latitude", cell: ({ row }) => row.original.latitude.toFixed(6) },

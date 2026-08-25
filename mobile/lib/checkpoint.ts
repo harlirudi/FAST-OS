@@ -99,7 +99,7 @@ export async function completeSession(
   return { success: true, message: data.message, duration: data.duration_minutes };
 }
 
-export async function getTodaySessions(): Promise<CheckpointSession[]> {
+export async function getTodaySessions(checkpointType: "cleaning" | "security" = "cleaning"): Promise<CheckpointSession[]> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return [];
 
@@ -109,8 +109,9 @@ export async function getTodaySessions(): Promise<CheckpointSession[]> {
   const today = new Date().toISOString().split("T")[0];
   const { data } = await supabase
     .from("checkpoint_logs")
-    .select("*, checkpoints(name)")
+    .select("*, checkpoints(name, type)")
     .eq("user_id", dbUser.id)
+    .eq("checkpoints.type", checkpointType)
     .gte("created_at", today)
     .order("started_at", { ascending: false });
 

@@ -29,8 +29,8 @@ Deno.serve(async (req) => {
     .eq("auth_id", payload.sub)
     .single();
 
-  if (!dbUser || dbUser.role !== "cleaner") {
-    return err("Hanya cleaner yang bisa absensi", 403);
+  if (!dbUser || !["cleaner", "security"].includes(dbUser.role)) {
+    return err("Hanya cleaner/security yang bisa absensi", 403);
   }
   if (!dbUser.site_id) {
     return err("Anda belum ditugaskan ke site manapun", 400);

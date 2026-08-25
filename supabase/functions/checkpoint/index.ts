@@ -34,8 +34,8 @@ Deno.serve(async (req) => {
 
   // === START SESSION ===
   if (action === "start") {
-    if (!dbUser || dbUser.role !== "cleaner") {
-      return err("Hanya cleaner yang bisa patroli", 403);
+    if (!dbUser || !["cleaner", "security"].includes(dbUser.role)) {
+      return err("Hanya cleaner/security yang bisa patroli", 403);
     }
     const { nfc_tag_id, qr_code_hash, latitude, longitude, before_photo_url } = body;
 
@@ -84,21 +84,21 @@ Deno.serve(async (req) => {
 
       const { data: cp } = await supabase
         .from("checkpoints")
-        .select("id, name, site_id, latitude, longitude")
+        .select("id, name, site_id, latitude, longitude, type")
         .eq("id", checkpointId)
         .single();
       checkpoint = cp || null;
     } else if (nfc_tag_id) {
       const { data: cp } = await supabase
         .from("checkpoints")
-        .select("id, name, site_id, latitude, longitude")
+        .select("id, name, site_id, latitude, longitude, type")
         .eq("nfc_tag_id", nfc_tag_id)
         .single();
       checkpoint = cp || null;
     } else {
       const { data: cp } = await supabase
         .from("checkpoints")
-        .select("id, name, site_id, latitude, longitude")
+        .select("id, name, site_id, latitude, longitude, type")
         .eq("qr_code_hash", qr_code_hash)
         .single();
       checkpoint = cp || null;
@@ -108,6 +108,12 @@ Deno.serve(async (req) => {
 
     if (checkpoint.site_id !== dbUser.site_id) {
       return err("Checkpoint ini bukan di site Anda", 400);
+    }
+
+    // Tipe checkpoint harus sesuai peran (cleaner -> cleaning, security -> security)
+    const expectedType = dbUser.role === "security" ? "security" : "cleaning";
+    if (checkpoint.type !== expectedType) {
+      return err("Checkpoint ini bukan untuk peran Anda", 403);
     }
 
     // Validasi GPS: harus dalam radius 50m dari checkpoint

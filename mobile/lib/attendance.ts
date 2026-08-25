@@ -10,7 +10,7 @@ export type AttendanceStatus = {
   totalCheckpoints: number;
 };
 
-export async function getAttendanceStatus(): Promise<AttendanceStatus> {
+export async function getAttendanceStatus(checkpointType: "cleaning" | "security" = "cleaning"): Promise<AttendanceStatus> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { checkedIn: false, lastCheckIn: null, siteName: null, completedCheckpoints: 0, totalCheckpoints: 0 };
 
@@ -47,14 +47,16 @@ export async function getAttendanceStatus(): Promise<AttendanceStatus> {
   const { count: total } = await supabase
     .from("checkpoints")
     .select("*", { count: "exact", head: true })
-    .eq("site_id", dbUser.site_id);
+    .eq("site_id", dbUser.site_id)
+    .eq("type", checkpointType);
 
   const { count: completed } = await supabase
     .from("checkpoint_logs")
     .select("*", { count: "exact", head: true })
     .eq("user_id", userId)
     .eq("status", "completed")
-    .gte("created_at", today);
+    .gte("created_at", today)
+    .eq("checkpoints.type", checkpointType);
 
   return {
     checkedIn,

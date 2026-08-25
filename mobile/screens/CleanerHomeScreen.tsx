@@ -16,7 +16,7 @@ import CheckpointSessionScreen from "./CheckpointSessionScreen";
 
 type Screen = "home" | "scan" | "session";
 
-export default function CleanerHomeScreen() {
+export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { checkpointType?: "cleaning" | "security" }) {
   const { user, name, signOut } = useAuth();
   const faceDetector = useFaceDetection();
   const [screen, setScreen] = useState<Screen>("home");
@@ -39,14 +39,17 @@ export default function CleanerHomeScreen() {
 
   const loadStatus = useCallback(async () => {
     setLoading(true);
-    const [status, todaySessions] = await Promise.all([getAttendanceStatus(), getTodaySessions()]);
+    const [status, todaySessions] = await Promise.all([
+      getAttendanceStatus(checkpointType),
+      getTodaySessions(checkpointType),
+    ]);
     setCheckedIn(status.checkedIn);
     setSiteName(status.siteName);
     setCompletedCP(status.completedCheckpoints);
     setTotalCP(status.totalCheckpoints);
     setSessions(todaySessions);
     setLoading(false);
-  }, []);
+  }, [checkpointType]);
 
   // Foto dari kamera → kompres lokal → deteksi wajah (ML Kit) → upload.
   // Foto tanpa wajah DITOLAK (anti foto sembarang) — check-in tidak lanjut.

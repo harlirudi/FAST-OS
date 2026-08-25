@@ -3,6 +3,7 @@ import { supabase, supabaseUrl } from "./supabase";
 export type TeamMember = {
   id: string;
   name: string;
+  role: string;
   checkedIn: boolean;
   lastCheckIn: string | null;
   completedCheckpoints: number;
@@ -20,15 +21,15 @@ export type OverrideEvent = {
 export async function getTeamStatus(siteId: string): Promise<TeamMember[]> {
   const today = new Date().toISOString().split("T")[0];
 
-  const { data: cleaners } = await supabase
+  const { data: team } = await supabase
     .from("users")
-    .select("id, name")
-    .eq("role", "cleaner")
+    .select("id, name, role")
+    .in("role", ["cleaner", "security"])
     .eq("site_id", siteId);
 
-  if (!cleaners) return [];
+  if (!team) return [];
 
-  const userIds = cleaners.map((c) => c.id);
+  const userIds = team.map((c) => c.id);
 
   const { data: attendance } = await supabase
     .from("attendance_logs")
@@ -56,7 +57,7 @@ export async function getTeamStatus(siteId: string): Promise<TeamMember[]> {
     completedByUser[l.user_id] = (completedByUser[l.user_id] || 0) + 1;
   });
 
-  return cleaners.map((c) => {
+  return team.map((c) => {
     const logs = (attendance || []).filter((a) => a.user_id === c.id);
     const lastCheckIn = logs.filter((l) => l.type === "check_in")[0];
     const lastCheckOut = logs.filter((l) => l.type === "check_out")[0];
@@ -64,6 +65,7 @@ export async function getTeamStatus(siteId: string): Promise<TeamMember[]> {
     return {
       id: c.id,
       name: c.name,
+      role: c.role,
       checkedIn: !!lastCheckIn && (!lastCheckOut || lastCheckIn.timestamp > lastCheckOut.timestamp),
       lastCheckIn: lastCheckIn?.timestamp ?? null,
       completedCheckpoints: completedByUser[c.id] || 0,
