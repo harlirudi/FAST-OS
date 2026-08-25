@@ -32,7 +32,7 @@ export default async function DashboardPage() {
       <div className="rounded-lg bg-white p-8 shadow">
         <h1 className="text-xl font-bold">Selamat datang, {name}</h1>
         <p className="mt-2 text-sm text-gray-600">
-          Peran: {role === "cleaner" ? "Cleaner" : role === "supervisor" ? "Supervisor" : role}
+          Peran: {role === "cleaner" ? "Cleaner" : role === "security" ? "Security" : role === "supervisor" ? "Supervisor" : role}
         </p>
 
         {!hasSite ? (

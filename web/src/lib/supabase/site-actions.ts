@@ -13,6 +13,7 @@ export async function createSite(formData: FormData) {
     latitude: latRaw ? parseFloat(latRaw) : null,
     longitude: lngRaw ? parseFloat(lngRaw) : null,
     radius_meters: parseInt(formData.get("radius_meters") as string) || 50,
+    start_time: (formData.get("start_time") as string) || "08:00",
   });
   revalidatePath("/admin/sites");
   redirect("/admin/sites");
@@ -29,6 +30,7 @@ export async function updateSite(id: string, formData: FormData) {
       latitude: latRaw ? parseFloat(latRaw) : null,
       longitude: lngRaw ? parseFloat(lngRaw) : null,
       radius_meters: parseInt(formData.get("radius_meters") as string) || 50,
+      start_time: (formData.get("start_time") as string) || "08:00",
     })
     .eq("id", id);
   revalidatePath("/admin/sites");

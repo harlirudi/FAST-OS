@@ -56,6 +56,16 @@ function downloadCSV(filename: string, rows: string[][]) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(a.href);
+  return csv;
+}
+
+async function copyToClipboard(csv: string) {
+  try {
+    await navigator.clipboard.writeText(csv);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export default function LogsPage() {
@@ -140,6 +150,7 @@ export default function LogsPage() {
   const exportCSV = async () => {
     // Fetch semua baris sesuai filter (maks 5000) untuk export
     const maxRows = 5000;
+    let csv: string | null = null;
     if (tab === "attendance") {
       let q = supabase
         .from("attendance_logs")
@@ -162,7 +173,7 @@ export default function LogsPage() {
         r.is_flagged ? "Ya" : "Tidak", r.override_reason ?? "-",
         r.check_in_photo_url || r.check_out_photo_url || "",
       ]);
-      downloadCSV(`absensi-${dateFrom}-${dateTo}.csv`, [header, ...body]);
+      csv = downloadCSV(`absensi-${dateFrom}-${dateTo}.csv`, [header, ...body]);
     } else {
       let q = supabase
         .from("checkpoint_logs")
@@ -185,7 +196,13 @@ export default function LogsPage() {
         r.before_photo_url ?? "", r.after_photo_url ?? "",
         r.inspection_note ?? r.note ?? "",
       ]);
-      downloadCSV(`checkpoint-${dateFrom}-${dateTo}.csv`, [header, ...body]);
+      csv = downloadCSV(`checkpoint-${dateFrom}-${dateTo}.csv`, [header, ...body]);
+    }
+    if (csv) {
+      const ok = await copyToClipboard(csv);
+      alert(ok
+        ? "File CSV terunduh & tersalin ke clipboard — buka Google Sheets → Ctrl/Cmd+V untuk menempel langsung."
+        : "File CSV terunduh.");
     }
   };
 

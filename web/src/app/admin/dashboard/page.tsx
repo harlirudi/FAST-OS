@@ -1,9 +1,8 @@
 import { createClient } from "@/lib/supabase/server";
 import { DashboardStats } from "@/components/admin/dashboard-stats";
 import { CompletionChart } from "@/components/admin/completion-chart";
-import { AttendanceTable } from "@/components/admin/attendance-table";
-import { CheckpointTable } from "@/components/admin/checkpoint-table";
 import { QrSettingsPanel } from "@/components/admin/qr-settings-panel";
+import AttendanceSpotlight from "@/components/admin/attendance-spotlight";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +35,9 @@ export default async function DashboardPage() {
     <div className="flex min-w-0 flex-col gap-6">
       <h2 className="text-2xl font-bold">Dashboard</h2>
       <DashboardStats />
+      <AttendanceSpotlight />
       <CompletionChart data={completionData} />
       <QrSettingsPanel />
-      <AttendanceTable />
-      <CheckpointTable />
     </div>
   );
 }

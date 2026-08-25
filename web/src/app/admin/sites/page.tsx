@@ -27,6 +27,7 @@ type Site = {
   latitude: number | null;
   longitude: number | null;
   radius_meters: number;
+  start_time: string | null;
   created_at: string;
 };
 
@@ -51,6 +52,7 @@ function EditDialog({ site }: { site: Site }) {
             <div className="flex-1"><Label>Longitude</Label><Input name="longitude" type="number" step="any" value={lng} onChange={(e) => setLng(e.target.value)} /></div>
           </div>
           <div><Label>Radius (meter)</Label><Input name="radius_meters" type="number" defaultValue={site.radius_meters} /></div>
+          <div><Label>Jam Mulai Kerja (WIB)</Label><Input name="start_time" type="time" defaultValue={site.start_time ?? "08:00"} /></div>
           <Button type="submit">Simpan</Button>
         </form>
       </DialogContent>
@@ -79,6 +81,7 @@ function CreateSiteDialog() {
             <div className="flex-1"><Label>Longitude</Label><Input name="longitude" type="number" step="any" placeholder="106.8456" value={lng} onChange={(e) => setLng(e.target.value)} /></div>
           </div>
           <div><Label>Radius (meter)</Label><Input name="radius_meters" type="number" defaultValue={50} /></div>
+          <div><Label>Jam Mulai Kerja (WIB)</Label><Input name="start_time" type="time" defaultValue="08:00" /></div>
           <p className="text-xs text-gray-500">
             Kosongkan koordinat — supervisor bisa set via GPS di mobile app, atau cari nama tempat di atas.
           </p>
