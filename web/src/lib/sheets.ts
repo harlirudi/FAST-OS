@@ -44,14 +44,7 @@ async function getAccessToken(): Promise<string> {
     exp: now + 3600,
   };
   const signingInput = base64url(JSON.stringify(header)) + "." + base64url(JSON.stringify(claims));
-  let signature: string | Buffer;
-  try {
-    signature = crypto.createSign("RSA-SHA256").update(signingInput).sign(key);
-  } catch (e: any) {
-    throw new Error(
-      `Sign gagal: b64=${!!process.env.GOOGLE_SHEETS_PRIVATE_KEY_B64} email="${email}" keyLen=${key.length} :: ${e.message}`
-    );
-  }
+  const signature = crypto.createSign("RSA-SHA256").update(signingInput).sign(key);
 
   const res = await fetch("https://oauth2.googleapis.com/token", {
     method: "POST",
@@ -63,9 +56,7 @@ async function getAccessToken(): Promise<string> {
   });
   if (!res.ok) {
     const body = await res.text();
-    throw new Error(
-      `Gagal mendapatkan token Google Sheets (${res.status}): ${body.slice(0, 200)} | email="${email}" b64=${!!process.env.GOOGLE_SHEETS_PRIVATE_KEY_B64} spId="${process.env.GOOGLE_SHEETS_SPREADSHEET_ID}"`
-    );
+    throw new Error(`Gagal mendapatkan token Google Sheets (${res.status}): ${body.slice(0, 200)}`);
   }
   const data = await res.json();
   return data.access_token as string;
