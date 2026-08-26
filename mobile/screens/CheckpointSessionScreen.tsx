@@ -25,8 +25,8 @@ export default function CheckpointSessionScreen({ sessionId, checkpointName, onC
   const [step, setStep] = useState<"before" | "after" | "done">("before");
 
   const compressAndUpload = async (uri: string): Promise<string | null> => {
-    const compressed = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: 1024 } }], {
-      compress: 0.7, format: ImageManipulator.SaveFormat.JPEG,
+    const compressed = await ImageManipulator.manipulateAsync(uri, [{ resize: { width: 640 } }], {
+      compress: 0.5, format: ImageManipulator.SaveFormat.JPEG,
     });
     try {
       const name = `${user?.id || "u"}/${Date.now()}.jpg`;

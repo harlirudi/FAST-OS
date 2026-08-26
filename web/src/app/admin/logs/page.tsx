@@ -31,7 +31,7 @@ function FilterSelect({ value, onChange, options, placeholder = "Pilih..." }: {
   );
 }
 
-type Site = { id: string; name: string };
+type Site = { id: string; name: string; start_time?: string | null };
 type User = { id: string; name: string; role: string };
 
 function PhotoThumb({ url, alt }: { url: string | null; alt: string }) {
@@ -69,6 +69,74 @@ async function copyToClipboard(csv: string) {
   }
 }
 
+
+type AttBlock = {
+  key: string; day: string; userName: string; siteName: string; siteId: string;
+  kind: "Kerja" | "Istirahat";
+  masuk: string; keluar: string | null;
+  durasi: number | null;
+  terlambat: boolean;
+  flagged: boolean; reason: string; photo: string | null;
+};
+
+// Gabungkan event absensi jadi blok Kerja/Istirahat per user/site/hari (sama dengan sync sheets)
+function pairAttendance(events: any[], startTimes: Record<string, string>): AttBlock[] {
+  const byKey = new Map<string, any[]>();
+  for (const e of events) {
+    const day = new Date(e.timestamp).toISOString().slice(0, 10);
+    const key = `${e.user_id}|${e.site_id}|${day}`;
+    if (!byKey.has(key)) byKey.set(key, []);
+    byKey.get(key)!.push(e);
+  }
+  const fmt = (ts: string) => new Date(ts).toLocaleString("id-ID", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+  const localHm = (ts: string) => {
+    const d = new Date(ts);
+    return new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(11, 16);
+  };
+  const dur = (a: string, b: string) => Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000));
+  const out: AttBlock[] = [];
+  for (const [key, evts] of byKey) {
+    const sorted = evts.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    const [userId, siteId, day] = key.split("|");
+    const userName = sorted[0].users?.name ?? "-";
+    const siteName = sorted[0].sites?.name ?? "-";
+    const startTime = startTimes[siteId] || "08:00";
+    let open: any = null;
+    let openKind: "Kerja" | "Istirahat" | null = null;
+    const close = (endEvt: any) => {
+      if (!open) return;
+      const kind = openKind === "Istirahat" ? "Istirahat" : "Kerja";
+      const flagged = open.is_flagged || endEvt.is_flagged;
+      out.push({
+        key: `${open.id}-${endEvt.id}`, day, userName, siteName, siteId, kind,
+        masuk: fmt(open.timestamp), keluar: fmt(endEvt.timestamp),
+        durasi: dur(open.timestamp, endEvt.timestamp),
+        terlambat: kind === "Kerja" && localHm(open.timestamp) > startTime,
+        flagged,
+        reason: (endEvt.override_reason || open.override_reason || ""),
+        photo: flagged ? (open.check_in_photo_url || open.check_out_photo_url || endEvt.check_in_photo_url || endEvt.check_out_photo_url || null) : null,
+      });
+      open = null; openKind = null;
+    };
+    for (const ev of sorted) {
+      if (ev.type === "break_start") { close(ev); open = ev; openKind = "Istirahat"; }
+      else if (ev.type === "break_end" || ev.type === "check_in") { close(ev); open = ev; openKind = "Kerja"; }
+      else if (ev.type === "check_out") { close(ev); }
+    }
+    if (open) {
+      out.push({
+        key: open.id, day, userName, siteName, siteId,
+        kind: openKind === "Istirahat" ? "Istirahat" : "Kerja",
+        masuk: fmt(open.timestamp), keluar: null, durasi: null,
+        terlambat: openKind === "Kerja" && localHm(open.timestamp) > startTime,
+        flagged: !!open.is_flagged, reason: open.override_reason || "",
+        photo: open.is_flagged ? (open.check_in_photo_url || open.check_out_photo_url || null) : null,
+      });
+    }
+  }
+  return out;
+}
+
 export default function LogsPage() {
   const supabase = createClient();
   const [tab, setTab] = useState<"attendance" | "checkpoint">("attendance");
@@ -97,7 +165,7 @@ export default function LogsPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.from("sites").select("id, name").order("name").then(({ data }) => setSites(data || []));
+    supabase.from("sites").select("id, name, start_time").order("name").then(({ data }) => setSites(data || []));
     supabase.from("users").select("id, name, role").order("name").then(({ data }) => setUsers(data || []));
     supabase.from("checkpoints").select("id, name").order("display_order").then(({ data }) => setCheckpoints(data || []));
   }, [supabase]);
@@ -240,45 +308,66 @@ export default function LogsPage() {
       <div className="overflow-x-auto rounded-lg border bg-white">
         {loading ? (
           <p className="p-6 text-center text-sm text-gray-400">Memuat...</p>
-        ) : tab === "attendance" ? (
+        ) : tab === "attendance" ? (() => {
+          const startTimes: Record<string, string> = {};
+          for (const s of sites) startTimes[s.id] = s.start_time || "08:00";
+          const blocks = pairAttendance(rows, startTimes);
+          return (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-600">
               <tr>
-                <th className="px-3 py-2 font-semibold">Waktu</th>
+                <th className="px-3 py-2 font-semibold">Tanggal</th>
                 <th className="px-3 py-2 font-semibold">User</th>
                 <th className="px-3 py-2 font-semibold">Site</th>
-                <th className="px-3 py-2 font-semibold">Tipe</th>
-                <th className="px-3 py-2 font-semibold">Jarak</th>
-                <th className="px-3 py-2 font-semibold">Flag</th>
+                <th className="px-3 py-2 font-semibold">Jenis</th>
+                <th className="px-3 py-2 font-semibold">Masuk</th>
+                <th className="px-3 py-2 font-semibold">Keluar</th>
+                <th className="px-3 py-2 font-semibold">Durasi</th>
+                <th className="px-3 py-2 font-semibold">Terlambat</th>
+                <th className="px-3 py-2 font-semibold">Flag/Alasan</th>
                 <th className="px-3 py-2 font-semibold">Foto</th>
               </tr>
             </thead>
             <tbody>
-              {rows.map((r: any) => (
-                <tr key={r.id} className="border-t hover:bg-slate-50/70">
-                  <td className="px-3 py-2 whitespace-nowrap">{new Date(r.timestamp).toLocaleString("id-ID")}</td>
-                  <td className="px-3 py-2">{r.users?.name ?? "-"}</td>
-                  <td className="px-3 py-2">{r.sites?.name ?? "-"}</td>
-                  <td className="px-3 py-2">{r.type === "check_in" ? "Check-in" : "Check-out"}</td>
-                  <td className="px-3 py-2">{r.distance_meters != null ? `${r.distance_meters}m` : "-"}</td>
+              {blocks.map((b) => (
+                <tr key={b.key} className="border-t hover:bg-slate-50/70">
+                  <td className="px-3 py-2 whitespace-nowrap">{b.day}</td>
+                  <td className="px-3 py-2">{b.userName}</td>
+                  <td className="px-3 py-2">{b.siteName}</td>
                   <td className="px-3 py-2">
-                    {r.is_flagged ? (
-                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800" title={r.override_reason || ""}>
-                        Ya{r.override_reason ? ` · ${r.override_reason.slice(0, 30)}` : ""}
+                    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${b.kind === "Istirahat" ? "bg-gray-100 text-gray-600" : "bg-blue-100 text-blue-800"}`}>
+                      {b.kind}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">{b.masuk}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{b.keluar ?? "—"}</td>
+                  <td className="px-3 py-2">{b.durasi != null ? `${b.durasi}m` : "—"}</td>
+                  <td className="px-3 py-2">
+                    {b.terlambat ? (
+                      <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">Terlambat</span>
+                    ) : b.kind === "Kerja" ? (
+                      <span className="rounded-full bg-green-100 px-2 py-0.5 text-xs text-green-700">Tepat</span>
+                    ) : "-"}
+                  </td>
+                  <td className="px-3 py-2">
+                    {b.flagged ? (
+                      <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs text-amber-800" title={b.reason}>
+                        Ya{b.reason ? ` · ${b.reason.slice(0, 30)}` : ""}
                       </span>
                     ) : "-"}
                   </td>
                   <td className="px-3 py-2">
-                    <PhotoThumb url={r.check_in_photo_url || r.check_out_photo_url} alt={`Foto ${r.type} — ${r.users?.name ?? ""}`} />
+                    <PhotoThumb url={b.photo} alt={`Foto — ${b.userName}`} />
                   </td>
                 </tr>
               ))}
-              {rows.length === 0 && (
-                <tr><td colSpan={7} className="p-6 text-center text-sm text-gray-400">Tidak ada data untuk filter ini.</td></tr>
+              {blocks.length === 0 && (
+                <tr><td colSpan={10} className="p-6 text-center text-sm text-gray-400">Tidak ada data untuk filter ini.</td></tr>
               )}
             </tbody>
           </table>
-        ) : (
+          );
+        })() : (
           <table className="w-full text-sm">
             <thead className="bg-slate-50 text-left text-xs text-slate-600">
               <tr>

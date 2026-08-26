@@ -71,20 +71,24 @@ export async function submitAttendance(
   type: "check_in" | "check_out",
   latitude: number,
   longitude: number,
-  photoUrl: string,
+  photoUri: string,
   overrideReason?: string
 ): Promise<{ success: boolean; message: string }> {
   // Offline: simpan ke antrian
   if (!isOnline()) {
     if (type === "check_in") {
-      await enqueue("check_in", { latitude, longitude, photoUrl, reason: overrideReason });
+      await enqueue("check_in", { latitude, longitude, photoUrl: photoUri, reason: overrideReason });
     } else {
-      await enqueue("check_out", { latitude, longitude, photoUrl });
+      await enqueue("check_out", { latitude, longitude, photoUrl: photoUri });
     }
     return { success: true, message: "Tersimpan lokal. Akan disinkron saat online." };
   }
 
   const { data: { session } } = await supabase.auth.getSession();
+
+  // Kirim foto sebagai base64 langsung ke edge (foto disimpan server
+  // hanya jika record di-flag — untuk review; record normal tidak disimpan).
+  const photoBase64 = await FileSystem.readAsStringAsync(photoUri, { encoding: "base64" });
 
   const res = await fetch(
     `${supabaseUrl}/functions/v1/attendance`,
@@ -98,7 +102,7 @@ export async function submitAttendance(
         type,
         latitude,
         longitude,
-        photo_url: photoUrl,
+        photo_base64: photoBase64,
         override_reason: overrideReason || undefined,
       }),
     }

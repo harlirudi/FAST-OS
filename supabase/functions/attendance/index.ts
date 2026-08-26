@@ -38,10 +38,27 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json();
-  const { type, latitude, longitude, photo_url, override_reason } = body;
+  const { type, latitude, longitude, photo_base64, photo_url, override_reason } = body;
 
-  if (!type || !latitude || !longitude || !photo_url) {
+  if (!type || !latitude || !longitude || (!photo_base64 && !photo_url)) {
     return err("Data tidak lengkap", 400);
+  }
+
+  // Selfie bytes: dari base64 (online) atau fetch URL (fallback offline lama)
+  let selfieBytes: Uint8Array | null = null;
+  if (photo_base64) {
+    try {
+      const bin = atob(photo_base64 as string);
+      const bytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+      selfieBytes = bytes;
+    } catch {
+      return err("Foto tidak valid (base64)", 400);
+    }
+  } else {
+    const selfieRes = await fetch(photo_url);
+    if (!selfieRes.ok) return err("Gagal mengambil foto", 500);
+    selfieBytes = new Uint8Array(await selfieRes.arrayBuffer());
   }
 
   const { data: site } = await supabase
@@ -71,18 +88,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
     const threshold = parseInt(cfg?.value || "75", 10) || 75;
 
-    const [selfieRes, refRes] = await Promise.all([
-      fetch(photo_url),
-      fetch(dbUser.reference_photo_url),
-    ]);
-    if (!selfieRes.ok || !refRes.ok) {
-      return err("Gagal mengambil foto untuk verifikasi wajah", 500);
+    const refRes = await fetch(dbUser.reference_photo_url);
+    if (!refRes.ok) {
+      return err("Gagal mengambil foto patokan", 500);
     }
-    const [selfieBuf, refBuf] = await Promise.all([
-      selfieRes.arrayBuffer(),
-      refRes.arrayBuffer(),
-    ]);
-    const result = await awsCompareFaces(new Uint8Array(refBuf), new Uint8Array(selfieBuf));
+    const refBuf = new Uint8Array(await refRes.arrayBuffer());
+    const result = await awsCompareFaces(refBuf, selfieBytes);
     if (result.error) {
       return err(`Verifikasi wajah gagal: ${result.error}`, 500);
     }
@@ -105,10 +116,24 @@ Deno.serve(async (req) => {
     is_flagged: !isWithinRadius && !!override_reason,
   };
 
+  // Foto disimpan HANYA untuk record flagged (di luar GPS + alasan) — untuk review.
+  // Record normal: wajah sudah diverifikasi, foto tidak disimpan (hemat storage).
+  const isFlagged = !isWithinRadius && !!override_reason;
+  let storedPhotoUrl: string | null = null;
+  if (isFlagged && selfieBytes) {
+    const photoPath = `${dbUser.id}/${Date.now()}.jpg`;
+    const { error: upErr } = await supabase.storage
+      .from("attendance-photos")
+      .upload(photoPath, selfieBytes, { contentType: "image/jpeg" });
+    if (!upErr) {
+      storedPhotoUrl = `${Deno.env.get("SUPABASE_URL")}/storage/v1/object/public/attendance-photos/${photoPath}`;
+    }
+  }
+
   if (type === "check_in") {
-    insertData.check_in_photo_url = photo_url;
+    insertData.check_in_photo_url = storedPhotoUrl;
   } else {
-    insertData.check_out_photo_url = photo_url;
+    insertData.check_out_photo_url = storedPhotoUrl;
   }
 
   const { error: insertErr } = await supabase.from("attendance_logs").insert(insertData);

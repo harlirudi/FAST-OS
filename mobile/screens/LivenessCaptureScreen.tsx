@@ -6,10 +6,12 @@ import { CameraView, useCameraPermissions, CameraType } from "expo-camera";
 import * as ImageManipulator from "expo-image-manipulator";
 import { useFaceDetection, RNMLKitFace } from "@infinitered/react-native-mlkit-face-detection";
 
-const FRAME_DELAY_MS = 900;
+const FRAME_DELAY_MS = 800;
 const BLINK_CLOSED = 0.4;
 const BLINK_OPEN = 0.6;
 const MOTION_PX = 15;
+const MAX_FRAMES = 8;
+const REQUIRED_BLINKS = 2;
 
 type Frame = { uri: string; face: RNMLKitFace | null; eyeOpen: number | null };
 
@@ -46,9 +48,15 @@ export default function LivenessCaptureScreen({
     setFrames([]);
     try {
       const captured: Frame[] = [];
-      for (let i = 0; i < 3; i++) {
+      let blinks = 0;
+      let prevOpen: boolean | null = null;
+      for (let i = 0; i < MAX_FRAMES; i++) {
         setStep(i);
-        setMessage(i === 1 ? "Berkedip sekali sekarang!" : "Tahan HP — jangan bergerak");
+        setMessage(
+          blinks >= REQUIRED_BLINKS
+            ? "Selesai — memproses..."
+            : `Kedipkan mata dua kali (${blinks}/${REQUIRED_BLINKS})`
+        );
         await new Promise((r) => setTimeout(r, 500));
         const photo = await cameraRef.current.takePictureAsync({ quality: 0.8, skipProcessing: true });
         if (!photo?.uri) throw new Error("Gagal mengambil foto");
@@ -63,8 +71,18 @@ export default function LivenessCaptureScreen({
           eyeOpen = face.leftEyeOpenProbability;
         }
         captured.push({ uri: photo.uri, face, eyeOpen });
+
+        // Hitung kedipan: transisi mata terbuka -> tertutup (satu kedipan)
+        if (eyeOpen !== null) {
+          const open = eyeOpen > BLINK_OPEN;
+          const closed = eyeOpen < BLINK_CLOSED;
+          if (prevOpen === true && closed) blinks += 1;
+          if (open || closed) prevOpen = open;
+        }
+
         setFrames([...captured]);
-        if (i < 2) await new Promise((r) => setTimeout(r, FRAME_DELAY_MS));
+        if (blinks >= REQUIRED_BLINKS) break;
+        if (i < MAX_FRAMES - 1) await new Promise((r) => setTimeout(r, FRAME_DELAY_MS));
       }
 
       const allHaveFace = captured.every((f) => f.face !== null);
@@ -73,34 +91,36 @@ export default function LivenessCaptureScreen({
         return;
       }
 
-      // 1) Kedipan: ada frame mata tertutup & ada frame mata terbuka
-      const eyeValues = captured.map((f) => f.eyeOpen);
-      const hasUsableEyes = eyeValues.some((v) => v !== null);
-      const blinkDetected =
-        hasUsableEyes &&
-        eyeValues.some((v) => v !== null && v < BLINK_CLOSED) &&
-        eyeValues.some((v) => v !== null && v > BLINK_OPEN);
-
-      // 2) Gerakan: posisi wajah berubah antar frame (foto statis tidak bergerak)
-      const centers = captured.map((f) =>
-        f.face
-          ? {
-              x: f.face.frame.origin.x + f.face.frame.size.x / 2,
-              y: f.face.frame.origin.y + f.face.frame.size.y / 2,
-            }
-          : null
-      );
-      const c0 = centers[0];
-      const motionDetected =
-        c0 !== null &&
-        centers.some((c) => c !== null && c !== c0 && Math.hypot(c.x - c0.x, c.y - c0.y) > MOTION_PX);
-
-      if (!blinkDetected && !motionDetected) {
+      const hasUsableEyes = captured.some((f) => f.eyeOpen !== null);
+      if (hasUsableEyes && blinks < REQUIRED_BLINKS) {
         Alert.alert(
           "Verifikasi Gagal",
-          "Kami tidak mendeteksi gerakan atau kedipan — sepertinya foto statis. Coba lagi: kedipkan mata dan gerakkan sedikit."
+          `Harus berkedip ${REQUIRED_BLINKS} kali agar terdeteksi sebagai orang asli (terdeteksi ${blinks} kedipan). Coba lagi — kedipkan mata saat diminta.`
         );
         return;
+      }
+
+      // Cadangan: jika perangkat tidak menyediakan data mata, gunakan gerakan wajah
+      if (!hasUsableEyes) {
+        const centers = captured.map((f) =>
+          f.face
+            ? {
+                x: f.face.frame.origin.x + f.face.frame.size.x / 2,
+                y: f.face.frame.origin.y + f.face.frame.size.y / 2,
+              }
+            : null
+        );
+        const c0 = centers[0];
+        const motionDetected =
+          c0 !== null &&
+          centers.some((c) => c !== null && c !== c0 && Math.hypot(c.x - c0.x, c.y - c0.y) > MOTION_PX);
+        if (!motionDetected) {
+          Alert.alert(
+            "Verifikasi Gagal",
+            "Kami tidak mendeteksi gerakan wajah — sepertinya foto statis. Coba lagi dengan menggerakkan kepala sedikit."
+          );
+          return;
+        }
       }
 
       // Frame terbaik: mata paling terbuka (atau frame pertama jika tidak tersedia)
@@ -150,8 +170,7 @@ export default function LivenessCaptureScreen({
           {capturing
             ? message
             : "Kamera depan — posisikan wajah di tengah layar, lalu ikuti instruksi (bukan foto/gambar)"}
-        </Text>
-        {capturing ? (
+        </Text>{capturing ? (
           <View style={styles.progressRow}>
             {[0, 1, 2].map((i) => (
               <View key={i} style={[styles.dot, i < frames.length && styles.dotDone, i === step && styles.dotActive]} />

@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NetInfo, { NetInfoState } from "@react-native-community/netinfo";
+import * as FileSystem from "expo-file-system/legacy";
 import { supabase, supabaseUrl } from "./supabase";
 
 const QUEUE_KEY = "sync_queue";
@@ -24,13 +25,25 @@ type QueuedAction = {
 
 type ActionHandler = (payload: any, token: string) => Promise<void>;
 
+// Baca file lokal sebagai base64 (untuk verifikasi wajah saat replay offline).
+// Kalau file sudah hilang → kirim tanpa foto (edge akan tolak → tetap antri).
+async function readLocalBase64(uri?: string): Promise<string | undefined> {
+  if (!uri) return undefined;
+  try {
+    return await FileSystem.readAsStringAsync(uri, { encoding: "base64" });
+  } catch {
+    return undefined;
+  }
+}
+
 const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> = {
   check_in: {
     label: "Check-In",
     handler: async (p, token) => {
+      const photo = await readLocalBase64(p.photoUrl);
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "check_in", latitude: p.latitude, longitude: p.longitude, photo_url: p.photoUrl, override_reason: p.reason }),
+        body: JSON.stringify({ type: "check_in", latitude: p.latitude, longitude: p.longitude, photo_base64: photo, override_reason: p.reason }),
       });
       if (!res.ok) throw new Error(await res.text());
     },
@@ -38,9 +51,10 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
   check_out: {
     label: "Check-Out",
     handler: async (p, token) => {
+      const photo = await readLocalBase64(p.photoUrl);
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "check_out", latitude: p.latitude, longitude: p.longitude, photo_url: p.photoUrl }),
+        body: JSON.stringify({ type: "check_out", latitude: p.latitude, longitude: p.longitude, photo_base64: photo }),
       });
       if (!res.ok) throw new Error(await res.text());
     },

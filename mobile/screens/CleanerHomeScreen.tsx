@@ -59,13 +59,9 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
       const type = pendingAttendanceType;
       setPendingAttendanceType(null);
       if (!uri || !type) return;
-      const photoUrl = await uploadPhoto(uri, user!.id);
-      if (!photoUrl) {
-        Alert.alert("Gagal", "Foto gagal diunggah. Periksa koneksi lalu coba lagi.");
-        return;
-      }
+      // Foto lokal langsung dikirim ke edge (base64) — server menyimpan hanya jika flagged
       const l = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      await doSubmit(type, photoUrl, { lat: l.coords.latitude, lng: l.coords.longitude });
+      await doSubmit(type, uri, { lat: l.coords.latitude, lng: l.coords.longitude });
     } catch (e: any) {
       if (e.message !== "Dibatalkan") Alert.alert("Error", e.message);
     }
