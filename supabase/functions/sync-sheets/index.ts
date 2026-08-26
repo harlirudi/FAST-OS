@@ -53,9 +53,20 @@ async function api(method: string, url: string, body?: unknown) {
     headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
     body: body === undefined ? undefined : JSON.stringify(body),
   });
-  if (!res.ok) throw new Error(`${method} ${url.split("/").pop()} gagal (${res.status})`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`${method} ${url.split("/").pop()} gagal (${res.status}): ${text.slice(0, 200)}`);
+  }
   if (res.status === 204) return null;
   return res.json();
+}
+
+// Cari sheetId per nama tab (tidak hardcode — urutan/id tab bisa beda)
+async function getSheetIdMap(): Promise<Record<string, number>> {
+  const data = await api("GET", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}?fields=sheets.properties(sheetId,title)`);
+  const map: Record<string, number> = {};
+  for (const s of data.sheets ?? []) map[s.properties.title] = s.properties.sheetId;
+  return map;
 }
 
 // Baca nilai untuk memeriksa header (A1)
@@ -65,32 +76,38 @@ async function readCell(range: string): Promise<string | undefined> {
 }
 
 async function writeHeader(sheetId: number, tabName: string, header: string[]): Promise<void> {
-  await api("PUT", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A1`, {
+  await api("PUT", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${tabName}!A1?valueInputOption=USER_ENTERED`, {
     range: `${tabName}!A1`, majorDimension: "ROWS", values: [header],
   });
-  // Beautify: freeze baris 1 + header bold/berwarna + filter dropdown + conditional formatting
   const ruleColor = (r: number, g: number, b: number) => ({ red: r / 255, green: g / 255, blue: b / 255 });
   const col = header.length;
-  const lastCol = String.fromCharCode(64 + col);
-  await api("POST", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
-    requests: [
+  // Beautify — tiap langkah berdiri sendiri; kegagalan satu tidak menggagalkan lainnya
+  // (mis. setBasicFilter konflik jika range sudah menjadi tabel otomatis).
+  const batch = (requests: any[]) =>
+    api("POST", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, { requests });
+  try {
+    await batch([
       { updateSheetProperties: { properties: { sheetId, gridProperties: { frozenRowCount: 1 } }, fields: "gridProperties.frozenRowCount" } },
       { repeatCell: { range: { sheetId, startRowIndex: 0, endRowIndex: 1, startColumnIndex: 0, endColumnIndex: col }, cell: { userEnteredFormat: { textFormat: { bold: true }, backgroundColor: ruleColor(219, 234, 254) } }, fields: "userEnteredFormat(textFormat,backgroundColor)" } },
-      { setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: col } } } },
-    ],
-  });
+    ]);
+  } catch {}
+  try {
+    await batch([{ setBasicFilter: { filter: { range: { sheetId, startRowIndex: 0, startColumnIndex: 0, endColumnIndex: col } } } }]);
+  } catch {
+    // Jika range sudah menjadi tabel, filter dropdown otomatis sudah tersedia
+  }
 }
 
 async function addConditionalRules(sheetId: number, col: number) {
-  const lastCol = String.fromCharCode(64 + col);
   const range = { sheetId, startRowIndex: 1, startColumnIndex: 0, endColumnIndex: col };
   const rules: any[] = [];
+  const mk = (ranges: any, format: any) => ({ ranges: [ranges], booleanRule: { condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: `=$H2="Ya"` }] }, format } });
   // H (8) Terlambat = "Ya" → merah
-  if (col >= 8) rules.push({ booleanRule: { condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: `=$H2="Ya"` }] }, format: { backgroundColor: { red: 0.95, green: 0.85, blue: 0.85 } } } });
+  if (col >= 8) rules.push({ ranges: [range], booleanRule: { condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: `=$H2="Ya"` }] }, format: { backgroundColor: { red: 0.95, green: 0.85, blue: 0.85 } } } });
   // I (9) Flag = "Ya" → kuning
-  if (col >= 9) rules.push({ booleanRule: { condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: `=$I2="Ya"` }] }, format: { backgroundColor: { red: 0.99, green: 0.95, blue: 0.8 } } } });
+  if (col >= 9) rules.push({ ranges: [range], booleanRule: { condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: `=$I2="Ya"` }] }, format: { backgroundColor: { red: 0.99, green: 0.95, blue: 0.8 } } } });
   // D (4) Jenis = "Istirahat" → abu
-  if (col >= 4) rules.push({ booleanRule: { condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: `=$D2="Istirahat"` }] }, format: { backgroundColor: { red: 0.93, green: 0.93, blue: 0.93 } } } });
+  if (col >= 4) rules.push({ ranges: [range], booleanRule: { condition: { type: "CUSTOM_FORMULA", values: [{ userEnteredValue: `=$D2="Istirahat"` }] }, format: { backgroundColor: { red: 0.93, green: 0.93, blue: 0.93 } } } });
   if (rules.length) {
     await api("POST", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
       requests: rules.map((r) => ({ addConditionalFormatRule: { rule: r, index: 0 } })),
@@ -99,6 +116,18 @@ async function addConditionalRules(sheetId: number, col: number) {
 }
 
 function syncTime(): string { return new Date().toLocaleString("id-ID"); }
+
+// Hapus tab & buat ulang dengan nama sama — membersihkan tabel otomatis
+// yang membuat header/append bermasalah. Mengembalikan sheetId baru.
+async function resetTab(title: string, oldSheetId: number): Promise<number> {
+  const res = await api("POST", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
+    requests: [
+      { deleteSheet: { sheetId: oldSheetId } },
+      { addSheet: { properties: { title } } },
+    ],
+  });
+  return res.replies[1].addSheet.properties.sheetId;
+}
 
 // Pairing event absensi -> blok Kerja / Istirahat per user/site/hari.
 // Event: check_in (mulai kerja), check_out (akhir kerja), break_start (mulai istirahat), break_end (akhir istirahat)
@@ -195,6 +224,13 @@ Deno.serve(async (req) => {
 
 async function handleSync(supabase: any, _unused: null): Promise<Response> {
   try {
+    const sheetIds = await getSheetIdMap();
+    let attSheetId = sheetIds["Absensi"];
+    let cpSheetId = sheetIds["Checkpoint"];
+    if (attSheetId === undefined || cpSheetId === undefined) {
+      throw new Error("Tab 'Absensi' atau 'Checkpoint' tidak ditemukan di spreadsheet");
+    }
+
     const nowIso = new Date().toISOString();
     const readMarker = async (key: string): Promise<string> => {
       const { data } = await supabase.from("app_config").select("value").eq("key", key).maybeSingle();
@@ -220,13 +256,11 @@ async function handleSync(supabase: any, _unused: null): Promise<Response> {
 
       const header = ["Tanggal", "User", "Site", "Jenis", "Masuk", "Keluar", "Durasi (mnt)", "Terlambat", "Flag/Alasan", "Foto"];
       const a1 = await readCell("Absensi!A1");
-      if (a1 === undefined || a1 === "Waktu Sinkron" || a1 === "Waktu Log") {
-        // Tab kosong atau format lama → reset + tulis header + beautify
-        await api("POST", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
-          requests: [{ updateCells: { range: { sheetId: 0, startRowIndex: 0, startColumnIndex: 0 }, fields: "*" } }],
-        });
-        await writeHeader(0, "Absensi", header);
-        await addConditionalRules(0, header.length);
+      if (a1 === undefined || a1 === "Waktu Sinkron" || a1 === "Waktu Log" || a1 === "Column 1") {
+        // Tab kosong/format lama/tabel otomatis → buat ulang + header + beautify
+        attSheetId = await resetTab("Absensi", attSheetId);
+        await writeHeader(attSheetId, "Absensi", header);
+        await addConditionalRules(attSheetId, header.length);
       }
       const rows = pairEvents(att, startTimes);
       if (rows.length > 0) {
@@ -245,11 +279,9 @@ async function handleSync(supabase: any, _unused: null): Promise<Response> {
     if (cp && cp.length > 0) {
       const header = ["Tanggal", "User", "Site", "Checkpoint", "Jenis", "Status", "Durasi (mnt)", "Sebelum", "Sesudah", "Catatan"];
       const a1 = await readCell("Checkpoint!A1");
-      if (a1 === undefined || a1 === "Waktu Sinkron" || a1 === "Waktu Log") {
-        await api("POST", `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}:batchUpdate`, {
-          requests: [{ updateCells: { range: { sheetId: 1, startRowIndex: 0, startColumnIndex: 0 }, fields: "*" } }],
-        });
-        await writeHeader(1, "Checkpoint", header);
+      if (a1 === undefined || a1 === "Waktu Sinkron" || a1 === "Waktu Log" || a1 === "Column 1") {
+        cpSheetId = await resetTab("Checkpoint", cpSheetId);
+        await writeHeader(cpSheetId, "Checkpoint", header);
       }
       const rows = cp.map((r: any) => [
         new Date(r.created_at).toISOString().slice(0, 10),
