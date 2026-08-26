@@ -3,20 +3,77 @@ import {
   View, Text, TextInput, TouchableOpacity, StyleSheet,
   ActivityIndicator, Alert, KeyboardAvoidingView, Platform,
 } from "react-native";
+import * as ImagePicker from "expo-image-picker";
+import * as ImageManipulator from "expo-image-manipulator";
+import { useFaceDetection } from "@infinitered/react-native-mlkit-face-detection";
 import { useAuth } from "../contexts/AuthContext";
 import { supabase } from "../lib/supabase";
+import { uploadPhoto } from "../lib/attendance";
 
 export default function OnboardingScreen() {
   const { user, refreshProfile } = useAuth();
+  const faceDetector = useFaceDetection();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     if (user) {
       setName(user.user_metadata?.full_name || user.user_metadata?.name || "");
     }
   }, [user]);
+
+  // Foto selfie sebagai patokan wajah untuk check-in/check-out (face matching)
+  const takeReferencePhoto = async () => {
+    try {
+      const cam = await ImagePicker.requestCameraPermissionsAsync();
+      if (!cam.granted) { Alert.alert("Izin kamera ditolak"); return; }
+      const r = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
+      if (r.canceled || !r.assets?.[0]) return;
+
+      const compressed = await ImageManipulator.manipulateAsync(r.assets[0].uri, [{ resize: { width: 1024 } }],
+        { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG });
+
+      // Tunggu model ML Kit siap
+      for (let i = 0; i < 50; i++) {
+        if (faceDetector.status === "ready" || faceDetector.status === "error") break;
+        await new Promise((res) => setTimeout(res, 100));
+      }
+      const result = await faceDetector.detectFaces(compressed.uri);
+      if (!result?.faces || result.faces.length === 0) {
+        Alert.alert("Foto tidak valid", "Wajah tidak terdeteksi. Harap gunakan foto selfie yang jelas.");
+        return;
+      }
+
+      const url = await uploadPhoto(compressed.uri, `reference/${user!.id}`);
+      if (!url) { Alert.alert("Gagal", "Foto gagal diunggah. Coba lagi."); return; }
+
+      const { error } = await supabase
+        .from("users")
+        .update({ reference_photo_url: url })
+        .eq("auth_id", user!.id);
+      if (error) { Alert.alert("Gagal", error.message); return; }
+
+      Alert.alert("Berhasil", "Foto patokan tersimpan. Check-in/check-out kamu akan diverifikasi dengan foto ini.", [
+        { text: "OK", onPress: () => refreshProfile() },
+      ]);
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Terjadi kesalahan");
+    }
+  };
+
+  const finishOnboarding = () => {
+    refreshProfile();
+    Alert.alert(
+      "Foto Patokan Wajah",
+      "Ambil foto selfie sekarang sebagai patokan verifikasi check-in/check-out?",
+      [
+        { text: "Nanti", style: "cancel", onPress: () => refreshProfile() },
+        { text: "Ambil Foto", onPress: takeReferencePhoto },
+      ]
+    );
+  };
 
   const handleSubmit = async () => {
     if (!name.trim()) {
@@ -54,9 +111,8 @@ export default function OnboardingScreen() {
     if (error) {
       Alert.alert("Gagal", error.message);
     } else {
-      Alert.alert("Berhasil", "Data diri tersimpan.", [
-        { text: "OK", onPress: () => refreshProfile() },
-      ]);
+      setSaved(true);
+      finishOnboarding();
     }
     setSaving(false);
   };

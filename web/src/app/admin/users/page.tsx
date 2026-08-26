@@ -16,7 +16,7 @@ import { updateUserRole, deleteUser } from "@/lib/supabase/user-actions";
 import { Pencil, Trash2 } from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
-type User = { id: string; name: string; role: string; site_id: string | null; sites?: { name: string } | null };
+type User = { id: string; name: string; role: string; site_id: string | null; reference_photo_url: string | null; sites?: { name: string } | null };
 type Site = { id: string; name: string };
 
 function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) {
@@ -121,6 +121,11 @@ export default function UsersPage() {
       return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${colors[row.original.role] || ""}`}>{row.original.role}</span>;
     }},
     { accessorKey: "sites.name", header: "Site", cell: ({ row }) => row.original.sites?.name ?? "-" },
+    { id: "refPhoto", header: "Foto Patokan", cell: ({ row }) =>
+      row.original.reference_photo_url
+        ? <img src={row.original.reference_photo_url} alt="patokan" className="h-8 w-8 rounded-full border object-cover" />
+        : <span className="text-xs text-gray-300">-</span>
+    },
     { id: "actions", header: "Aksi", cell: ({ row }) => (
       <div className="flex gap-2">
         <EditUserDialog user={row.original} onSaved={loadUsers} />

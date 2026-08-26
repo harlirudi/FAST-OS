@@ -1,6 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { getUserFromToken, ok, err } from "../_shared/auth.ts";
 import { haversineDistance } from "../_shared/geo.ts";
+import { awsCompareFaces } from "../_shared/aws.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -25,7 +26,7 @@ Deno.serve(async (req) => {
 
   const { data: dbUser } = await supabase
     .from("users")
-    .select("id, role, site_id")
+    .select("id, role, site_id, reference_photo_url")
     .eq("auth_id", payload.sub)
     .single();
 
@@ -59,6 +60,38 @@ Deno.serve(async (req) => {
       `Anda berada ${Math.round(distance)}m dari site (max ${site.radius_meters}m)`,
       400
     );
+  }
+
+  // Face match: jika user punya foto patokan, selfie harus cocok (AWS Rekognition)
+  if (dbUser.reference_photo_url) {
+    const { data: cfg } = await supabase
+      .from("app_config")
+      .select("value")
+      .eq("key", "face_match_threshold")
+      .maybeSingle();
+    const threshold = parseInt(cfg?.value || "75", 10) || 75;
+
+    const [selfieRes, refRes] = await Promise.all([
+      fetch(photo_url),
+      fetch(dbUser.reference_photo_url),
+    ]);
+    if (!selfieRes.ok || !refRes.ok) {
+      return err("Gagal mengambil foto untuk verifikasi wajah", 500);
+    }
+    const [selfieBuf, refBuf] = await Promise.all([
+      selfieRes.arrayBuffer(),
+      refRes.arrayBuffer(),
+    ]);
+    const result = await awsCompareFaces(new Uint8Array(refBuf), new Uint8Array(selfieBuf));
+    if (result.error) {
+      return err(`Verifikasi wajah gagal: ${result.error}`, 500);
+    }
+    if (result.similarity < threshold) {
+      return err(
+        `Wajah tidak cocok dengan foto pendaftaran (kemiripan ${result.similarity}%, minimal ${threshold}%)`,
+        400
+      );
+    }
   }
 
   const insertData: Record<string, unknown> = {
