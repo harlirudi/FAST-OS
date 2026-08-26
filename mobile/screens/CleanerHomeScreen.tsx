@@ -20,7 +20,11 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
+  const [onBreak, setOnBreak] = useState(false);
   const [siteName, setSiteName] = useState<string | null>(null);
+  const [siteLat, setSiteLat] = useState<number | null>(null);
+  const [siteLng, setSiteLng] = useState<number | null>(null);
+  const [siteRadius, setSiteRadius] = useState<number | null>(null);
   const [completedCP, setCompletedCP] = useState(0);
   const [totalCP, setTotalCP] = useState(0);
   const [showOverride, setShowOverride] = useState(false);
@@ -30,11 +34,11 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
   const [activeCheckpointName, setActiveCheckpointName] = useState("");
   const [pendingCount, setPendingCount] = useState(0);
   const [pendingItems, setPendingItems] = useState<PendingItem[]>([]);
-  const [pendingAction, setPendingAction] = useState<"check_in" | "check_out" | null>(null);
+  const [pendingAction, setPendingAction] = useState<"check_in" | "check_out" | "break_start" | "break_end" | null>(null);
   const [pendingPhotoUrl, setPendingPhotoUrl] = useState("");
   const [pendingLoc, setPendingLoc] = useState<{ lat: number; lng: number } | null>(null);
 
-  const [pendingAttendanceType, setPendingAttendanceType] = useState<"check_in" | "check_out" | null>(null);
+  const [pendingAttendanceType, setPendingAttendanceType] = useState<"check_in" | "check_out" | "break_start" | "break_end" | null>(null);
   const [livenessMode, setLivenessMode] = useState(false);
 
   const loadStatus = useCallback(async () => {
@@ -44,7 +48,11 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
       getTodaySessions(checkpointType),
     ]);
     setCheckedIn(status.checkedIn);
+    setOnBreak(status.onBreak);
     setSiteName(status.siteName);
+    setSiteLat(status.siteLat);
+    setSiteLng(status.siteLng);
+    setSiteRadius(status.siteRadius);
     setCompletedCP(status.completedCheckpoints);
     setTotalCP(status.totalCheckpoints);
     setSessions(todaySessions);
@@ -67,7 +75,7 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
     }
   };
 
-  const doSubmit = async (type: "check_in" | "check_out", photoUrl: string, loc: { lat: number; lng: number }, reason?: string) => {
+  const doSubmit = async (type: "check_in" | "check_out" | "break_start" | "break_end", photoUrl: string, loc: { lat: number; lng: number }, reason?: string) => {
     const res = await submitAttendance(type, loc.lat, loc.lng, photoUrl, reason);
     if (res.success) {
       Alert.alert("Berhasil", res.message);
@@ -85,8 +93,8 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
     return false;
   };
 
-  const handleAttendance = async (type: "check_in" | "check_out") => {
-    // Buka kamera liveness (3 frame + kedipan/gerakan) — anti foto statis
+  const handleAttendance = async (type: "check_in" | "check_out" | "break_start" | "break_end") => {
+    // Buka kamera liveness (3 frame + kedipan) — anti foto statis
     setPendingAttendanceType(type);
     setLivenessMode(true);
   };
@@ -107,6 +115,51 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
   const handleSessionStarted = (sId: string, cpName: string) => { setActiveSessionId(sId); setActiveCheckpointName(cpName); setScreen("session"); };
   const handleSessionDone = async () => { setScreen("home"); await loadStatus(); };
 
+  // Deteksi GPS di luar area: jika masih check-in (kerja) tapi HP >5 menit di luar
+  // radius site → prompt catat istirahat. Hanya berjalan saat app di layar home.
+  useEffect(() => {
+    if (!checkedIn || onBreak || screen !== "home" || siteLat == null || siteLng == null || siteRadius == null) return;
+    let outsideSince: number | null = null;
+    let promptShown = false;
+    const haversine = (lat1: number, lng1: number, lat2: number, lng2: number) => {
+      const R = 6371000;
+      const toRad = (d: number) => (d * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+      return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    };
+    const OUTSIDE_MS = 5 * 60 * 1000;
+
+    const check = async () => {
+      if (promptShown) return;
+      try {
+        const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const dist = haversine(loc.coords.latitude, loc.coords.longitude, siteLat, siteLng);
+        if (dist > siteRadius) {
+          outsideSince = outsideSince ?? Date.now();
+          if (Date.now() - outsideSince >= OUTSIDE_MS) {
+            promptShown = true;
+            Alert.alert(
+              "Di Luar Area",
+              `HP kamu di luar area site (${siteName}) lebih dari 5 menit. Catat sebagai istirahat?`,
+              [
+                { text: "Saya masih di sini", style: "cancel", onPress: () => { outsideSince = null; promptShown = false; } },
+                { text: "Catat Istirahat", onPress: () => handleAttendance("break_start") },
+              ]
+            );
+          }
+        } else {
+          outsideSince = null;
+        }
+      } catch {}
+    };
+
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checkedIn, onBreak, screen, siteLat, siteLng, siteRadius, siteName]);
+
   useEffect(() => { loadStatus(); }, [loadStatus]);
   useEffect(() => { getPendingCount().then(setPendingCount); getPendingItems().then(setPendingItems);
     return onPendingChange(c => { setPendingCount(c); getPendingItems().then(setPendingItems); }); }, []);
@@ -123,13 +176,37 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
         {pendingCount>0 && <View style={S.badge}><Text style={S.badgeText}>{pendingCount} pending</Text></View>}
       </View>
       <View style={S.statusCard}>
-        <View style={S.statusRow}><Text style={S.statusLabel}>Status</Text><Text style={[S.statusValue,checkedIn?S.statusIn:S.statusOut]}>{checkedIn?"Sudah Check-in":"Belum Check-in"}</Text></View>
+        <View style={S.statusRow}><Text style={S.statusLabel}>Status</Text>
+          <Text style={[S.statusValue, onBreak ? S.statusBreak : checkedIn ? S.statusIn : S.statusOut]}>
+            {onBreak ? "Beristirahat" : checkedIn ? "Sudah Check-in" : "Belum Check-in"}
+          </Text>
+        </View>
         <View style={S.statusRow}><Text style={S.statusLabel}>Checkpoint</Text><Text style={S.progressValue}>{completedCP}/{totalCP} selesai</Text></View>
       </View>
-      <TouchableOpacity style={[S.mainBtn,checkedIn?S.checkoutBtn:S.checkinBtn,actionLoading&&S.btnDisabled]} onPress={()=>handleAttendance(checkedIn?"check_out":"check_in")} disabled={actionLoading}>
-        {actionLoading?<ActivityIndicator color="#fff"/>:<Text style={S.mainBtnText}>{checkedIn?"Check-Out":"Check-In"}</Text>}
-      </TouchableOpacity>
-      <TouchableOpacity style={[S.scanBtn,!checkedIn&&S.btnDisabled]} onPress={()=>setScreen("scan")} disabled={!checkedIn}><Text style={S.scanBtnText}>Scan Checkpoint</Text></TouchableOpacity>
+
+      {!checkedIn ? (
+        <TouchableOpacity style={[S.mainBtn, S.checkinBtn, actionLoading && S.btnDisabled]}
+          onPress={() => handleAttendance("check_in")} disabled={actionLoading}>
+          {actionLoading ? <ActivityIndicator color="#fff" /> : <Text style={S.mainBtnText}>Check-In</Text>}
+        </TouchableOpacity>
+      ) : onBreak ? (
+        <TouchableOpacity style={[S.mainBtn, S.checkinBtn, actionLoading && S.btnDisabled]}
+          onPress={() => handleAttendance("break_end")} disabled={actionLoading}>
+          {actionLoading ? <ActivityIndicator color="#fff" /> : <Text style={S.mainBtnText}>Kembali</Text>}
+        </TouchableOpacity>
+      ) : (
+        <>
+          <TouchableOpacity style={[S.breakBtn, actionLoading && S.btnDisabled]}
+            onPress={() => handleAttendance("break_start")} disabled={actionLoading}>
+            {actionLoading ? <ActivityIndicator color="#fff" /> : <Text style={S.mainBtnText}>Istirahat</Text>}
+          </TouchableOpacity>
+          <TouchableOpacity style={[S.mainBtn, S.checkoutBtn, actionLoading && S.btnDisabled]}
+            onPress={() => handleAttendance("check_out")} disabled={actionLoading}>
+            <Text style={S.mainBtnText}>Check-Out</Text>
+          </TouchableOpacity>
+        </>
+      )}
+      <TouchableOpacity style={[S.scanBtn, (!checkedIn || onBreak) && S.btnDisabled]} onPress={() => setScreen("scan")} disabled={!checkedIn || onBreak}><Text style={S.scanBtnText}>Scan Checkpoint</Text></TouchableOpacity>
       <View style={S.sec}><Text style={S.secTitle}>Riwayat Hari Ini</Text>
         {sessions.length===0?<Text style={S.empty}>Belum ada sesi.</Text>:sessions.map(s=><TouchableOpacity key={s.id} style={S.sCard} onPress={s.status==="in_progress"?()=>{setActiveSessionId(s.id);setActiveCheckpointName(s.checkpoints?.name||"CP");setScreen("session");}:undefined}><View style={{flex:1}}><Text style={S.sName}>{s.checkpoints?.name||"CP"}</Text><Text style={S.sTime}>{new Date(s.started_at).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}{s.duration_minutes?` — ${s.duration_minutes}m`:""}</Text></View><Text style={[S.sStat,s.status==="completed"?S.sDone:s.status==="in_progress"?S.sProg:S.sExp]}>{s.status==="completed"?"Selesai":s.status==="in_progress"?"Berjalan":"Kedaluwarsa"}</Text></TouchableOpacity>)}
       </View>
@@ -156,9 +233,10 @@ const S = StyleSheet.create({
   badge:{backgroundColor:"#fef3c7",borderRadius:12,paddingHorizontal:10,paddingVertical:4},badgeText:{color:"#92400e",fontSize:12,fontWeight:"600"},
   statusCard:{backgroundColor:"#fff",borderRadius:12,padding:20,marginBottom:24,elevation:2},
   statusRow:{flexDirection:"row",justifyContent:"space-between",marginBottom:12},statusLabel:{fontSize:14,color:"#6b7280"},
-  statusValue:{fontSize:14,fontWeight:"600"},statusIn:{color:"#16a34a"},statusOut:{color:"#dc2626"},
+  statusValue:{fontSize:14,fontWeight:"600"},statusIn:{color:"#16a34a"},statusOut:{color:"#dc2626"},statusBreak:{color:"#d97706"},
   progressValue:{fontSize:14,fontWeight:"600",color:"#2563eb"},
   mainBtn:{borderRadius:16,padding:24,alignItems:"center",marginBottom:12,elevation:4},
+  breakBtn:{backgroundColor:"#d97706",borderRadius:16,padding:24,alignItems:"center",marginBottom:12,elevation:4},
   checkinBtn:{backgroundColor:"#16a34a"},checkoutBtn:{backgroundColor:"#dc2626"},btnDisabled:{opacity:.6},
   mainBtnText:{color:"#fff",fontSize:20,fontWeight:"bold"},
   scanBtn:{backgroundColor:"#2563eb",borderRadius:12,padding:16,alignItems:"center",marginBottom:24,elevation:2},scanBtnText:{color:"#fff",fontSize:16,fontWeight:"600"},

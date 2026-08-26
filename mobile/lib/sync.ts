@@ -9,6 +9,8 @@ const QUEUE_KEY = "sync_queue";
 type ActionPayloads = {
   check_in: { latitude: number; longitude: number; photoUrl: string; reason?: string };
   check_out: { latitude: number; longitude: number; photoUrl: string };
+  break_start: { latitude: number; longitude: number; photoUrl: string };
+  break_end: { latitude: number; longitude: number; photoUrl: string };
   checkpoint_start: { identifier: string; mode: "nfc" | "qr"; latitude: number; longitude: number };
   checkpoint_photo: { sessionId: string; photoType: "before" | "after"; photoUrl: string };
   checkpoint_complete: { sessionId: string; photoUrl: string; latitude: number; longitude: number };
@@ -55,6 +57,28 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ type: "check_out", latitude: p.latitude, longitude: p.longitude, photo_base64: photo }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
+  },
+  break_start: {
+    label: "Istirahat",
+    handler: async (p, token) => {
+      const photo = await readLocalBase64(p.photoUrl);
+      const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type: "break_start", latitude: p.latitude, longitude: p.longitude, photo_base64: photo }),
+      });
+      if (!res.ok) throw new Error(await res.text());
+    },
+  },
+  break_end: {
+    label: "Kembali",
+    handler: async (p, token) => {
+      const photo = await readLocalBase64(p.photoUrl);
+      const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
+        method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ type: "break_end", latitude: p.latitude, longitude: p.longitude, photo_base64: photo }),
       });
       if (!res.ok) throw new Error(await res.text());
     },

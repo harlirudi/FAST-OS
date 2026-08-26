@@ -40,9 +40,12 @@ Deno.serve(async (req) => {
   const body = await req.json();
   const { type, latitude, longitude, photo_base64, photo_url, override_reason } = body;
 
-  if (!type || !latitude || !longitude || (!photo_base64 && !photo_url)) {
+  const ALLOWED_TYPES = ["check_in", "check_out", "break_start", "break_end"];
+  if (!ALLOWED_TYPES.includes(type) || !latitude || !longitude || (!photo_base64 && !photo_url)) {
     return err("Data tidak lengkap", 400);
   }
+
+  const isBreak = type === "break_start" || type === "break_end";
 
   // Selfie bytes: dari base64 (online) atau fetch URL (fallback offline lama)
   let selfieBytes: Uint8Array | null = null;
@@ -72,7 +75,8 @@ Deno.serve(async (req) => {
   const distance = haversineDistance(latitude, longitude, site.latitude, site.longitude);
   const isWithinRadius = distance <= site.radius_meters;
 
-  if (!isWithinRadius && !override_reason) {
+  // Istirahat (break_start/break_end) = transisi status, tanpa validasi radius
+  if (!isBreak && !isWithinRadius && !override_reason) {
     return err(
       `Anda berada ${Math.round(distance)}m dari site (max ${site.radius_meters}m)`,
       400
@@ -105,6 +109,7 @@ Deno.serve(async (req) => {
     }
   }
 
+  const isFlagged = !isBreak && !isWithinRadius && !!override_reason;
   const insertData: Record<string, unknown> = {
     user_id: dbUser.id,
     site_id: dbUser.site_id,
@@ -113,12 +118,11 @@ Deno.serve(async (req) => {
     longitude,
     distance_meters: Math.round(distance),
     override_reason: override_reason || null,
-    is_flagged: !isWithinRadius && !!override_reason,
+    is_flagged: isFlagged,
   };
 
   // Foto disimpan HANYA untuk record flagged (di luar GPS + alasan) — untuk review.
   // Record normal: wajah sudah diverifikasi, foto tidak disimpan (hemat storage).
-  const isFlagged = !isWithinRadius && !!override_reason;
   let storedPhotoUrl: string | null = null;
   if (isFlagged && selfieBytes) {
     const photoPath = `${dbUser.id}/${Date.now()}.jpg`;
@@ -139,6 +143,7 @@ Deno.serve(async (req) => {
   const { error: insertErr } = await supabase.from("attendance_logs").insert(insertData);
   if (insertErr) return err("Gagal menyimpan absensi", 500);
 
+  // Hanya check-out yang mengakhiri sesi checkpoint
   if (type === "check_out") {
     await supabase
       .from("checkpoint_logs")
@@ -147,10 +152,16 @@ Deno.serve(async (req) => {
       .eq("status", "in_progress");
   }
 
+  const message =
+    type === "check_in" ? "Check-in berhasil"
+    : type === "check_out" ? "Check-out berhasil"
+    : type === "break_start" ? "Istirahat tercatat"
+    : "Kembali — check-in tercatat";
+
   return ok({
-    message: type === "check_in" ? "Check-in berhasil" : "Check-out berhasil",
+    message,
     distance_meters: Math.round(distance),
     within_radius: isWithinRadius,
-    is_flagged: !isWithinRadius && !!override_reason,
+    is_flagged: isFlagged,
   });
 });

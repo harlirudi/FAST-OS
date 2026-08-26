@@ -4,15 +4,31 @@ import * as FileSystem from "expo-file-system/legacy";
 
 export type AttendanceStatus = {
   checkedIn: boolean;
+  onBreak: boolean;
   lastCheckIn: string | null;
   siteName: string | null;
+  siteLat: number | null;
+  siteLng: number | null;
+  siteRadius: number | null;
   completedCheckpoints: number;
   totalCheckpoints: number;
 };
 
+const EMPTY_STATUS: AttendanceStatus = {
+  checkedIn: false,
+  onBreak: false,
+  lastCheckIn: null,
+  siteName: null,
+  siteLat: null,
+  siteLng: null,
+  siteRadius: null,
+  completedCheckpoints: 0,
+  totalCheckpoints: 0,
+};
+
 export async function getAttendanceStatus(checkpointType: "cleaning" | "security" = "cleaning"): Promise<AttendanceStatus> {
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return { checkedIn: false, lastCheckIn: null, siteName: null, completedCheckpoints: 0, totalCheckpoints: 0 };
+  if (!user) return EMPTY_STATUS;
 
   const { data: dbUser } = await supabase
     .from("users")
@@ -21,7 +37,7 @@ export async function getAttendanceStatus(checkpointType: "cleaning" | "security
     .single();
 
   if (!dbUser?.site_id) {
-    return { checkedIn: false, lastCheckIn: null, siteName: null, completedCheckpoints: 0, totalCheckpoints: 0 };
+    return EMPTY_STATUS;
   }
 
   const today = new Date().toISOString().split("T")[0];
@@ -34,13 +50,16 @@ export async function getAttendanceStatus(checkpointType: "cleaning" | "security
     .gte("timestamp", today)
     .order("timestamp", { ascending: false });
 
-  const lastCheckIn = checkIns?.find((l) => l.type === "check_in");
-  const lastCheckOut = checkIns?.find((l) => l.type === "check_out");
-  const checkedIn = !!lastCheckIn && (!lastCheckOut || lastCheckIn.timestamp > lastCheckOut.timestamp);
+  const START_TYPES = ["check_in", "break_end"];
+  const END_TYPES = ["check_out", "break_start"];
+  const lastStart = checkIns?.find((l) => START_TYPES.includes(l.type));
+  const lastEnd = checkIns?.find((l) => END_TYPES.includes(l.type));
+  const checkedIn = !!lastStart && (!lastEnd || lastStart.timestamp > lastEnd.timestamp);
+  const onBreak = checkIns?.[0]?.type === "break_start";
 
   const { data: site } = await supabase
     .from("sites")
-    .select("name")
+    .select("name, latitude, longitude, radius_meters")
     .eq("id", dbUser.site_id)
     .single();
 
@@ -60,15 +79,19 @@ export async function getAttendanceStatus(checkpointType: "cleaning" | "security
 
   return {
     checkedIn,
-    lastCheckIn: lastCheckIn?.timestamp ?? null,
+    onBreak,
+    lastCheckIn: lastStart?.timestamp ?? null,
     siteName: site?.name ?? null,
+    siteLat: site?.latitude ?? null,
+    siteLng: site?.longitude ?? null,
+    siteRadius: site?.radius_meters ?? null,
     completedCheckpoints: completed ?? 0,
     totalCheckpoints: total ?? 0,
   };
 }
 
 export async function submitAttendance(
-  type: "check_in" | "check_out",
+  type: "check_in" | "check_out" | "break_start" | "break_end",
   latitude: number,
   longitude: number,
   photoUri: string,
@@ -76,11 +99,7 @@ export async function submitAttendance(
 ): Promise<{ success: boolean; message: string }> {
   // Offline: simpan ke antrian
   if (!isOnline()) {
-    if (type === "check_in") {
-      await enqueue("check_in", { latitude, longitude, photoUrl: photoUri, reason: overrideReason });
-    } else {
-      await enqueue("check_out", { latitude, longitude, photoUrl: photoUri });
-    }
+    await enqueue(type, { latitude, longitude, photoUrl: photoUri, reason: overrideReason } as any);
     return { success: true, message: "Tersimpan lokal. Akan disinkron saat online." };
   }
 
