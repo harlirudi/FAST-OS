@@ -1,24 +1,21 @@
 import React, { useCallback, useEffect, useState } from "react";
 import {
   View, Text, TouchableOpacity, StyleSheet, Alert,
-  ActivityIndicator, Modal, TextInput, ScrollView, Image,
+  ActivityIndicator, Modal, TextInput, ScrollView,
 } from "react-native";
 import * as Location from "expo-location";
-import * as ImagePicker from "expo-image-picker";
-import * as ImageManipulator from "expo-image-manipulator";
-import { useFaceDetection } from "@infinitered/react-native-mlkit-face-detection";
 import { useAuth } from "../contexts/AuthContext";
 import { getAttendanceStatus, submitAttendance, uploadPhoto } from "../lib/attendance";
 import { getTodaySessions, CheckpointSession } from "../lib/checkpoint";
 import { getPendingCount, onPendingChange, getPendingItems, PendingItem } from "../lib/sync";
 import CheckpointScanScreen from "./CheckpointScanScreen";
 import CheckpointSessionScreen from "./CheckpointSessionScreen";
+import LivenessCaptureScreen from "./LivenessCaptureScreen";
 
-type Screen = "home" | "scan" | "session";
+type Screen = "home" | "scan" | "session" | "liveness";
 
 export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { checkpointType?: "cleaning" | "security" }) {
   const { user, name, signOut } = useAuth();
-  const faceDetector = useFaceDetection();
   const [screen, setScreen] = useState<Screen>("home");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
@@ -37,6 +34,9 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
   const [pendingPhotoUrl, setPendingPhotoUrl] = useState("");
   const [pendingLoc, setPendingLoc] = useState<{ lat: number; lng: number } | null>(null);
 
+  const [pendingAttendanceType, setPendingAttendanceType] = useState<"check_in" | "check_out" | null>(null);
+  const [livenessMode, setLivenessMode] = useState(false);
+
   const loadStatus = useCallback(async () => {
     setLoading(true);
     const [status, todaySessions] = await Promise.all([
@@ -51,70 +51,24 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
     setLoading(false);
   }, [checkpointType]);
 
-  // Foto dari kamera → kompres lokal → deteksi wajah (ML Kit) → upload.
-  // Foto tanpa wajah DITOLAK (anti foto sembarang) — check-in tidak lanjut.
-  // Catatan: di Android, hasil detectFaces TIDAK punya field `success`
-  // (hanya faces + imagePath) — jadi cek faces.length, bukan result.success.
-  const captureAndVerifyPhoto = async (): Promise<string | null> => {
-    const cam = await ImagePicker.requestCameraPermissionsAsync();
-    if (!cam.granted) throw new Error("Izin kamera ditolak");
-    const r = await ImagePicker.launchCameraAsync({ quality: 0.8, allowsEditing: false });
-    if (r.canceled || !r.assets?.[0]) return null;
-
-    const compressed = await ImageManipulator.manipulateAsync(r.assets[0].uri, [{ resize: { width: 1024 } }],
-      { compress: 0.7, format: ImageManipulator.SaveFormat.JPEG });
-
-    // Tunggu model ML Kit siap (maks ±5 detik)
-    for (let i = 0; i < 50; i++) {
-      if (faceDetector.status === "ready" || faceDetector.status === "error") break;
-      await new Promise((res) => setTimeout(res, 100));
-    }
-
-    let faces;
+  // Verifikasi liveness (anti foto statis): kamera inline 3 frame + kedipan/gerakan.
+  // Frame terbaik sudah terkompres & terverifikasi wajah oleh LivenessCaptureScreen.
+  const handleLivenessResult = async (uri: string | null) => {
+    setLivenessMode(false);
     try {
-      const result = await faceDetector.detectFaces(compressed.uri);
-      faces = result?.faces ?? [];
-    } catch (e: any) {
-      Alert.alert("Gagal Deteksi", "Deteksi wajah tidak berfungsi saat ini. Coba lagi.");
-      return null;
-    }
-
-    if (faces.length === 0) {
-      Alert.alert(
-        "Foto tidak valid",
-        "Wajah tidak terdeteksi pada foto. Harap gunakan foto selfie Anda untuk check-in/check-out."
-      );
-      return null;
-    }
-
-    // Validasi posisi wajah agar selfie selalu pada frame yang wajar
-    const img = await new Promise<{ width: number; height: number } | null>((resolve) => {
-      Image.getSize(compressed.uri, (width, height) => resolve({ width, height }), () => resolve(null));
-    });
-    if (img) {
-      const frame = faces[0].frame;
-      const fw = frame.size.x;
-      const fh = frame.size.y;
-      const fcX = frame.origin.x + fw / 2;
-      const fcY = frame.origin.y + fh / 2;
-      const faceWideEnough = fw >= img.width * 0.15 && fh >= img.height * 0.15;
-      const centered = Math.abs(fcX - img.width / 2) <= img.width * 0.4
-        && Math.abs(fcY - img.height / 2) <= img.height * 0.4;
-      if (!faceWideEnough || !centered) {
-        Alert.alert(
-          "Posisi Wajah",
-          "Posisikan wajah di tengah bingkai, cukup dekat dengan kamera (selfie), lalu coba lagi."
-        );
-        return null;
+      const type = pendingAttendanceType;
+      setPendingAttendanceType(null);
+      if (!uri || !type) return;
+      const photoUrl = await uploadPhoto(uri, user!.id);
+      if (!photoUrl) {
+        Alert.alert("Gagal", "Foto gagal diunggah. Periksa koneksi lalu coba lagi.");
+        return;
       }
+      const l = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+      await doSubmit(type, photoUrl, { lat: l.coords.latitude, lng: l.coords.longitude });
+    } catch (e: any) {
+      if (e.message !== "Dibatalkan") Alert.alert("Error", e.message);
     }
-
-    const url = await uploadPhoto(compressed.uri, user!.id);
-    if (!url) {
-      Alert.alert("Gagal", "Foto gagal diunggah. Periksa koneksi lalu coba lagi.");
-      return null;
-    }
-    return url;
   };
 
   const doSubmit = async (type: "check_in" | "check_out", photoUrl: string, loc: { lat: number; lng: number }, reason?: string) => {
@@ -136,18 +90,9 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
   };
 
   const handleAttendance = async (type: "check_in" | "check_out") => {
-    setActionLoading(true);
-    try {
-      const photoUrl = await captureAndVerifyPhoto();
-      if (!photoUrl) return;
-      const l = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
-      await doSubmit(type, photoUrl, { lat: l.coords.latitude, lng: l.coords.longitude });
-    } catch (e: any) {
-      if (e.message !== "Dibatalkan") Alert.alert("Error", e.message);
-    } finally {
-      // Pastikan tombol selalu aktif kembali — termasuk saat foto dibatalkan/ditolak
-      setActionLoading(false);
-    }
+    // Buka kamera liveness (3 frame + kedipan/gerakan) — anti foto statis
+    setPendingAttendanceType(type);
+    setLivenessMode(true);
   };
 
   const handleOverride = async () => {
@@ -172,6 +117,7 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
 
   if (screen === "scan") return <View style={{flex:1}}><CheckpointScanScreen onSessionStarted={handleSessionStarted} /><TouchableOpacity style={{position:"absolute",top:60,left:20}} onPress={()=>setScreen("home")}><Text style={{color:"#6b7280"}}>Kembali</Text></TouchableOpacity></View>;
   if (screen === "session" && activeSessionId) return <CheckpointSessionScreen sessionId={activeSessionId} checkpointName={activeCheckpointName} onComplete={handleSessionDone} onBack={()=>setScreen("home")} />;
+  if (livenessMode && pendingAttendanceType) return <LivenessCaptureScreen onResult={handleLivenessResult} />;
   if (loading) return <View style={S.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
 
   return (
