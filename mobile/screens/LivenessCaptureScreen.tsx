@@ -13,7 +13,7 @@ const MOTION_PX = 15;
 
 type Frame = { uri: string; face: RNMLKitFace | null; eyeOpen: number | null };
 
-// Anti-spoofing Level 3 (MVP): kamera inline mengambil 3 frame (±2 detik),
+// Anti-spoofing Level 3 (MVP): kamera DEPAN inline mengambil 3 frame (±2 detik),
 // user diminta berkedip. Foto statis (dicetak/di layar) tidak berkedip dan
 // tidak bergerak → ditolak. Frame terbaik (wajah + mata terbuka) jadi foto resmi.
 export default function LivenessCaptureScreen({
@@ -142,9 +142,14 @@ export default function LivenessCaptureScreen({
         style={StyleSheet.absoluteFill}
         facing={"front" as CameraType}
       />
+      <View style={styles.frontBadge}>
+        <Text style={styles.frontBadgeText}>Kamera Depan</Text>
+      </View>
       <View style={styles.overlay}>
         <Text style={styles.stepText}>
-          {capturing ? message : "Ketuk 'Mulai' — ikuti instruksi di layar (jangan foto/gambar)"}
+          {capturing
+            ? message
+            : "Kamera depan — posisikan wajah di tengah layar, lalu ikuti instruksi (bukan foto/gambar)"}
         </Text>
         {capturing ? (
           <View style={styles.progressRow}>
@@ -174,6 +179,12 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#000" },
   center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f3f4f6", padding: 24 },
   hint: { fontSize: 14, color: "#6b7280", marginBottom: 20, textAlign: "center" },
+  frontBadge: {
+    position: "absolute", top: 60, alignSelf: "center",
+    backgroundColor: "rgba(0,0,0,0.55)", borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 6, zIndex: 10,
+  },
+  frontBadgeText: { color: "#fff", fontSize: 13, fontWeight: "700" },
   overlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: "flex-end",
