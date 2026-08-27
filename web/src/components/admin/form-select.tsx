@@ -15,12 +15,14 @@ export function FormSelect({
   options,
   placeholder = "Pilih...",
   required,
+  onChange,
 }: {
   name: string;
   defaultValue?: string;
   options: { value: string; label: string }[];
   placeholder?: string;
   required?: boolean;
+  onChange?: (value: string) => void;
 }) {
   const [value, setValue] = useState(defaultValue || "");
 
@@ -32,7 +34,11 @@ export function FormSelect({
       <Select
         items={items}
         value={value || undefined}
-        onValueChange={(v) => setValue(v ?? "")}
+        onValueChange={(v) => {
+          const next = v ?? "";
+          setValue(next);
+          onChange?.(next);
+        }}
         required={required}
       >
         <SelectTrigger>

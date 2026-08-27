@@ -23,14 +23,19 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
   const [open, setOpen] = useState(false);
   const [sites, setSites] = useState<Site[]>([]);
   const [selectedSites, setSelectedSites] = useState<string[]>([]);
+  const [role, setRole] = useState(user.role);
   const [loadingSites, setLoadingSites] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
+
+  // Cleaner/Security maksimal 1 site; Supervisor bisa banyak site.
+  const isMultiSite = role === "supervisor";
 
   // Muat daftar site setiap dialog dibuka (hindari state stale)
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     if (next) {
+      setRole(user.role);
       setSelectedSites((user.user_sites ?? []).map((s) => s.site_id).filter(Boolean));
       if (sites.length === 0) {
         setLoadingSites(true);
@@ -55,9 +60,11 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
   const handleSubmit = async (formData: FormData) => {
     setSaving(true);
     setSaveError("");
-    // Multi-site: checkbox site_ids (diperbarui via state, karena checkbox
-    // tidak dikirim FormData secara andal di React Server Actions client form)
-    selectedSites.forEach((siteId) => formData.append("site_ids", siteId));
+    // Supervisor: multi-site dari checkbox (state). Cleaner/Security: 1 site
+    // dari dropdown (hidden input FormSelect sudah ikut terkirim).
+    if (isMultiSite) {
+      selectedSites.forEach((siteId) => formData.append("site_ids", siteId));
+    }
     const result = await updateUserRole(user.id, formData);
     setSaving(false);
     if (result.success) {
@@ -83,13 +90,13 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
         <form action={handleSubmit} className="space-y-3">
           <div><Label>Nama</Label><Input name="name" defaultValue={user.name} required /></div>
           <div><Label>Peran</Label>
-            <FormSelect name="role" defaultValue={user.role}
+            <FormSelect name="role" defaultValue={user.role} onChange={setRole}
               options={[{ value: "admin", label: "Admin" }, { value: "supervisor", label: "Supervisor" }, { value: "cleaner", label: "Cleaner" }, { value: "security", label: "Security" }]} />
           </div>
-          <div><Label>Site (bisa lebih dari satu)</Label>
+          <div><Label>{isMultiSite ? "Site (bisa lebih dari satu — Supervisor)" : "Site (Cleaner/Security: satu)"}</Label>
             {loadingSites ? (
               <p className="rounded-md border border-dashed border-slate-300 px-3 py-2 text-sm text-slate-400">Memuat daftar site...</p>
-            ) : (
+            ) : isMultiSite ? (
               <div className="max-h-44 space-y-1 overflow-y-auto rounded-md border border-slate-200 p-2">
                 {sites.map((s) => (
                   <label key={s.id} className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 hover:bg-slate-50">
@@ -106,6 +113,9 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
                 ))}
                 {sites.length === 0 && <p className="px-2 py-1 text-sm text-slate-400">Belum ada site. Buat site dulu.</p>}
               </div>
+            ) : (
+              <FormSelect name="site_ids" defaultValue={user.user_sites?.[0]?.site_id ?? "none"}
+                options={[{ value: "none", label: "Tidak ada" }, ...sites.map((s) => ({ value: s.id, label: s.name }))]} />
             )}
           </div>
           <Button type="submit" disabled={saving}>
