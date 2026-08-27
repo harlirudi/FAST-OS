@@ -23,27 +23,62 @@ export default function OnboardingScreen() {
 
   // Foto selfie sebagai patokan wajah untuk check-in/check-out (face matching),
   // dengan verifikasi liveness (anti foto statis) — frame terbaik sudah terverifikasi.
+  // DIAMBIL SEBELUM profil disimpan: begitu profil tersimpan, AppNavigator pindah
+  // ke layar berikutnya (menunggu/kerja) — jadi alur capture harus selesai dulu.
   const handleLivenessResult = async (uri: string | null) => {
     setLivenessMode(false);
-    if (!uri || !user) return;
-    try {
-      const url = await uploadPhoto(uri, `reference/${user.id}`);
-      if (!url) { Alert.alert("Gagal", "Foto gagal diunggah. Coba lagi."); return; }
-      const { error } = await supabase
-        .from("users")
-        .update({ reference_photo_url: url })
-        .eq("auth_id", user.id);
-      if (error) { Alert.alert("Gagal", error.message); return; }
-      Alert.alert("Berhasil", "Foto patokan tersimpan. Check-in/check-out kamu akan diverifikasi dengan foto ini.", [
-        { text: "OK", onPress: () => refreshProfile() },
-      ]);
-    } catch (e: any) {
-      Alert.alert("Error", e?.message || "Terjadi kesalahan");
-    }
+    await saveProfile(uri);
   };
 
-  const takeReferencePhoto = () => {
-    setLivenessMode(true);
+  // Simpan nama + HP (+ foto patokan jika ada), lalu selesaikan onboarding
+  const saveProfile = async (referenceUri?: string | null) => {
+    if (!user) return;
+    setSaving(true);
+    try {
+      const { data: existing } = await supabase
+        .from("users")
+        .select("id")
+        .eq("auth_id", user.id)
+        .maybeSingle();
+
+      let error;
+      if (existing) {
+        ({ error } = await supabase
+          .from("users")
+          .update({ name: name.trim(), phone: phone.trim() })
+          .eq("auth_id", user.id));
+      } else {
+        ({ error } = await supabase.from("users").insert({
+          auth_id: user.id,
+          name: name.trim(),
+          phone: phone.trim(),
+          role: "cleaner",
+        }));
+      }
+      if (error) { Alert.alert("Gagal", error.message); return; }
+
+      if (referenceUri) {
+        const url = await uploadPhoto(referenceUri, `reference/${user.id}`);
+        if (url) {
+          await supabase
+            .from("users")
+            .update({ reference_photo_url: url })
+            .eq("auth_id", user.id);
+        }
+      }
+
+      if (referenceUri) {
+        Alert.alert("Berhasil", "Foto patokan tersimpan. Check-in/check-out kamu akan diverifikasi dengan foto ini.", [
+          { text: "OK", onPress: () => refreshProfile() },
+        ]);
+      } else {
+        refreshProfile();
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Terjadi kesalahan");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const finishOnboarding = () => {
@@ -51,8 +86,8 @@ export default function OnboardingScreen() {
       "Foto Patokan Wajah",
       "Ambil foto selfie sekarang sebagai patokan verifikasi check-in/check-out?",
       [
-        { text: "Nanti", style: "cancel", onPress: () => refreshProfile() },
-        { text: "Ambil Foto", onPress: takeReferencePhoto },
+        { text: "Nanti", style: "cancel", onPress: () => saveProfile() },
+        { text: "Ambil Foto", onPress: () => setLivenessMode(true) },
       ]
     );
   };
@@ -66,36 +101,7 @@ export default function OnboardingScreen() {
       Alert.alert("Perhatian", "Nomor HP wajib diisi.");
       return;
     }
-    setSaving(true);
-
-    // Cek record existing (dibuat trigger)
-    const { data: existing } = await supabase
-      .from("users")
-      .select("id")
-      .eq("auth_id", user!.id)
-      .maybeSingle();
-
-    let error;
-    if (existing) {
-      ({ error } = await supabase
-        .from("users")
-        .update({ name: name.trim(), phone: phone.trim() })
-        .eq("auth_id", user!.id));
-    } else {
-      ({ error } = await supabase.from("users").insert({
-        auth_id: user!.id,
-        name: name.trim(),
-        phone: phone.trim(),
-        role: "cleaner",
-      }));
-    }
-
-    if (error) {
-      Alert.alert("Gagal", error.message);
-    } else {
-      finishOnboarding();
-    }
-    setSaving(false);
+    finishOnboarding();
   };
 
   if (livenessMode) return <LivenessCaptureScreen onResult={handleLivenessResult} />;
