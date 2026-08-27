@@ -250,7 +250,7 @@ const roleLabel: Record<string, string> = { cleaner: "Cleaner", security: "Secur
 
 export default function LogsPage() {
   const supabase = createClient();
-  const [tab, setTab] = useState<"attendance" | "checkpoint">("attendance");
+  const [tab, setTab] = useState<"attendance" | "checkpoint" | "recap">("attendance");
   const [sites, setSites] = useState<Site[]>([]);
   const [users, setUsers] = useState<User[]>([]);
 
@@ -302,29 +302,25 @@ export default function LogsPage() {
         if (attType !== "all") q = q.eq("type", attType);
         if (attFlagged === "yes") q = q.eq("is_flagged", true);
         if (attFlagged === "no") q = q.eq("is_flagged", false);
-        const [{ data, count }, recapRes] = await Promise.all([
-          q,
-          // Ambil SEMUA event dalam rentang (tanpa pagination) untuk rekap harian
-          (async () => {
-            let rq = supabase
-              .from("attendance_logs")
-              .select("*, users(name, role), sites(name)")
-              .gte("timestamp", `${dateFrom}T00:00:00`)
-              .lte("timestamp", `${dateTo}T23:59:59`)
-              .limit(5000);
-            if (siteId !== "all") rq = rq.eq("site_id", siteId);
-            if (userId !== "all") rq = rq.eq("user_id", userId);
-            if (attType !== "all") rq = rq.eq("type", attType);
-            if (attFlagged === "yes") rq = rq.eq("is_flagged", true);
-            if (attFlagged === "no") rq = rq.eq("is_flagged", false);
-            return rq;
-          })(),
-        ]);
+        const { data, count } = await q;
         setRows(data || []);
         setTotal(count ?? 0);
+      } else if (tab === "recap") {
+        // Rekap harian: ambil SEMUA event dalam rentang (tanpa pagination) + filter site/user
+        let rq = supabase
+          .from("attendance_logs")
+          .select("*, users(name, role), sites(name)")
+          .gte("timestamp", `${dateFrom}T00:00:00`)
+          .lte("timestamp", `${dateTo}T23:59:59`)
+          .limit(5000);
+        if (siteId !== "all") rq = rq.eq("site_id", siteId);
+        if (userId !== "all") rq = rq.eq("user_id", userId);
+        const { data } = await rq;
+        setRows([]);
+        setTotal(0);
         const startTimes: Record<string, string> = {};
         for (const s of sites) startTimes[s.id] = s.start_time || "08:00";
-        setRecapRows(buildDailyRecap(recapRes.data || [], startTimes, users));
+        setRecapRows(buildDailyRecap(data || [], startTimes, users));
       } else {
         let q = supabase
           .from("checkpoint_logs")
@@ -375,7 +371,7 @@ export default function LogsPage() {
       </div>
 
       <div className="flex gap-1 border-b">
-        {([["attendance", "Absensi"], ["checkpoint", "Checkpoint"]] as const).map(([k, label]) => (
+        {([["attendance", "Absensi"], ["checkpoint", "Checkpoint"], ["recap", "Rekap Harian"]] as const).map(([k, label]) => (
           <button
             key={k}
             type="button"
@@ -412,7 +408,7 @@ export default function LogsPage() {
             <div>
               <Label>Tipe</Label>
               <FilterSelect value={attType} onChange={setAttType}
-                options={[{ value: "all", label: "Semua" }, { value: "check_in", label: "Check-in" }, { value: "check_out", label: "Check-out" }]} />
+                options={[{ value: "all", label: "Semua" }, { value: "check_in", label: "Check-in" }, { value: "check_out", label: "Check-out" }, { value: "break_start", label: "Istirahat" }, { value: "break_end", label: "Kembali" }]} />
             </div>
             <div>
               <Label>Flag</Label>
@@ -420,7 +416,7 @@ export default function LogsPage() {
                 options={[{ value: "all", label: "Semua" }, { value: "yes", label: "Ya (di luar GPS)" }, { value: "no", label: "Tidak" }]} />
             </div>
           </>
-        ) : (
+        ) : tab === "checkpoint" ? (
           <>
             <div>
               <Label>Checkpoint</Label>
@@ -433,11 +429,11 @@ export default function LogsPage() {
                 options={[{ value: "all", label: "Semua" }, { value: "completed", label: "Selesai" }, { value: "in_progress", label: "Berjalan" }, { value: "expired", label: "Kedaluwarsa" }]} />
             </div>
           </>
-        )}
+        ) : null}
       </div>
 
-      {/* Rekap Harian (jam kerja per karyawan) */}
-      {tab === "attendance" && (
+      {/* Rekap Harian (tab sendiri) */}
+      {tab === "recap" && (
         <div className="overflow-x-auto rounded-lg border bg-white">
           <div className="border-b bg-slate-50 px-4 py-2 text-sm font-semibold text-slate-700">
             Rekap Harian — Jam Kerja (target: {`${Math.floor(480 / 60)}j`} cleaner/security, {`${Math.floor(420 / 60)}j`} supervisor; lembur dipotong di target)
