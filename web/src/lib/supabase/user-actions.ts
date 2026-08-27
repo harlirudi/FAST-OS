@@ -3,14 +3,17 @@
 import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
 
-// Update profil user + sinkronkan user_sites (multi-site):
-// hapus semua assignment lama → insert pilihan baru → users.site_id = site utama
-// (site pertama; null jika tidak ada — kompatibel dengan logika single-site lama).
+// Update profil user + sinkronkan user_sites (multi-site) via RPC atomik
+// (hapus+insert dalam satu transaksi — anti duplicate key / race).
 // Cleaner/Security MAKSIMAL 1 site; Supervisor boleh banyak.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export async function updateUserRole(userId: string, formData: FormData) {
   const supabase = await createClient();
   const newRole = formData.get("role") as string;
-  const siteIds = formData.getAll("site_ids").map(String).filter((s) => s && s !== "none");
+  const siteIds = [...new Set(
+    formData.getAll("site_ids").map(String).filter((s) => UUID_RE.test(s))
+  )];
 
   if (newRole !== "supervisor" && siteIds.length > 1) {
     return { success: false, message: "Cleaner/Security hanya bisa 1 site. Pilih satu site saja." };
@@ -28,15 +31,12 @@ export async function updateUserRole(userId: string, formData: FormData) {
     .eq("id", userId);
   if (error) return { success: false, message: error.message };
 
-  const { error: delErr } = await supabase.from("user_sites").delete().eq("user_id", userId);
-  if (delErr) return { success: false, message: delErr.message };
-
-  if (siteIds.length > 0) {
-    const { error: insErr } = await supabase.from("user_sites").insert(
-      siteIds.map((site_id) => ({ user_id: userId, site_id }))
-    );
-    if (insErr) return { success: false, message: insErr.message };
-  }
+  // RPC atomik: hapus semua + insert baru dalam SATU transaksi
+  const { error: rpcErr } = await supabase.rpc("replace_user_sites", {
+    p_user_id: userId,
+    p_site_ids: siteIds,
+  });
+  if (rpcErr) return { success: false, message: rpcErr.message };
 
   revalidatePath("/admin/users");
   return { success: true, message: null };
