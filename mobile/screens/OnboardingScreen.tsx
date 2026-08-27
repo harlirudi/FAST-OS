@@ -9,7 +9,7 @@ import { uploadPhoto } from "../lib/attendance";
 import LivenessCaptureScreen from "./LivenessCaptureScreen";
 
 export default function OnboardingScreen() {
-  const { user, refreshProfile } = useAuth();
+  const { user, signOut, refreshProfile } = useAuth();
   const [name, setName] = useState("");
   const [phone, setPhone] = useState("");
   const [saving, setSaving] = useState(false);
@@ -27,6 +27,8 @@ export default function OnboardingScreen() {
   // ke layar berikutnya (menunggu/kerja) — jadi alur capture harus selesai dulu.
   const handleLivenessResult = async (uri: string | null) => {
     setLivenessMode(false);
+    // Batal / gagal → JANGAN simpan profil tanpa foto patokan (tetap di onboarding)
+    if (!uri) return;
     await saveProfile(uri);
   };
 
@@ -154,6 +156,10 @@ export default function OnboardingScreen() {
             <Text style={styles.saveBtnText}>Simpan & Lanjutkan</Text>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity style={styles.logoutBtn} onPress={() => signOut()}>
+          <Text style={styles.logoutText}>Keluar / Ganti Akun</Text>
+        </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
   );
@@ -236,5 +242,14 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 15,
     fontWeight: "600",
+  },
+  logoutBtn: {
+    padding: 12,
+    alignItems: "center",
+    marginTop: 4,
+  },
+  logoutText: {
+    color: "#6b7280",
+    fontSize: 13,
   },
 });

@@ -8,7 +8,38 @@ export type TeamMember = {
   lastCheckIn: string | null;
   completedCheckpoints: number;
   totalCheckpoints: number;
+  kerjaMin: number;
+  istirahatMin: number;
+  status: string;
 };
+
+const WIB = 7 * 3600 * 1000;
+
+// Jam kerja hari ini: blok Kerja (cap 8j = 480m), istirahat, status.
+function calcHours(logs: { type: string; timestamp: string }[]) {
+  const dur = (a: string, b: string) => Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000));
+  const sorted = [...logs].sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+  let kerjaMin = 0;
+  let istirahatMin = 0;
+  let open: { type: string; timestamp: string } | null = null;
+  let openKind: string | null = null;
+  const close = (endEvt: { timestamp: string }) => {
+    if (!open) return;
+    const d = dur(open.timestamp, endEvt.timestamp);
+    if (openKind === "istirahat") istirahatMin += d;
+    else kerjaMin += d;
+    open = null; openKind = null;
+  };
+  for (const ev of sorted) {
+    if (ev.type === "break_start") { close(ev); open = ev; openKind = "istirahat"; }
+    else if (ev.type === "break_end" || ev.type === "check_in") { close(ev); open = ev; openKind = "kerja"; }
+    else if (ev.type === "check_out") { close(ev); }
+  }
+  const target = 480;
+  const hasCheckIn = sorted.some((e) => e.type === "check_in");
+  const status = !hasCheckIn ? "Absen" : kerjaMin >= target ? "Lengkap" : `Kurang ${target - kerjaMin}m`;
+  return { kerjaMin: Math.min(kerjaMin, target), istirahatMin, status };
+}
 
 export type OverrideEvent = {
   id: string;
@@ -61,6 +92,7 @@ export async function getTeamStatus(siteId: string): Promise<TeamMember[]> {
     const logs = (attendance || []).filter((a) => a.user_id === c.id);
     const lastCheckIn = logs.filter((l) => l.type === "check_in")[0];
     const lastCheckOut = logs.filter((l) => l.type === "check_out")[0];
+    const hours = calcHours(logs);
 
     return {
       id: c.id,
@@ -70,6 +102,7 @@ export async function getTeamStatus(siteId: string): Promise<TeamMember[]> {
       lastCheckIn: lastCheckIn?.timestamp ?? null,
       completedCheckpoints: completedByUser[c.id] || 0,
       totalCheckpoints: totalCP,
+      ...hours,
     };
   });
 }

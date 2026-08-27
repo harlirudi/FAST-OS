@@ -18,12 +18,15 @@ import AddCheckpointScreen from "./AddCheckpointScreen";
 
 type Tab = "team" | "inspections" | "overrides" | "photos" | "setup";
 
+const fmtHM = (min: number) => `${Math.floor(min / 60)}j ${min % 60}m`;
+
 export default function SupervisorDashboardScreen() {
-  const { user, signOut } = useAuth();
+  const { user, sites, signOut } = useAuth();
   const [tab, setTab] = useState<Tab>("team");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [siteId, setSiteId] = useState<string | null>(null);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [sitePickerOpen, setSitePickerOpen] = useState(false);
   const [team, setTeam] = useState<TeamMember[]>([]);
   const [overrides, setOverrides] = useState<OverrideEvent[]>([]);
   const [lastPhotos, setLastPhotos] = useState<CheckpointInspection[]>([]);
@@ -42,13 +45,13 @@ export default function SupervisorDashboardScreen() {
     const { data: dbUser } = await supabase
       .from("users").select("id, site_id").eq("auth_id", user!.id).single();
 
-    if (!dbUser?.site_id) { if (!silent) setLoading(false); return; }
-    setSiteId(dbUser.site_id);
+    const effectiveSiteId = selectedSiteId ?? dbUser?.site_id;
+    if (!effectiveSiteId) { if (!silent) setLoading(false); return; }
 
     const [teamData, overridesData, photosData, inspectionsData] = await Promise.all([
-      getTeamStatus(dbUser.site_id),
-      getOverrides(dbUser.site_id),
-      getLastCleaningPerCheckpoint(dbUser.site_id),
+      getTeamStatus(effectiveSiteId),
+      getOverrides(effectiveSiteId),
+      getLastCleaningPerCheckpoint(effectiveSiteId),
       getMyInspections(),
     ]);
     setTeam(teamData);
@@ -56,7 +59,14 @@ export default function SupervisorDashboardScreen() {
     setLastPhotos(photosData);
     setInspections(inspectionsData);
     if (!silent) setLoading(false);
-  }, [user]);
+  }, [user, selectedSiteId]);
+
+  // Default pilih site pertama (multi-site: supervisor pilih via switcher)
+  useEffect(() => {
+    if (!selectedSiteId && sites.length > 0) {
+      setSelectedSiteId(sites[0].id);
+    }
+  }, [sites]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -149,6 +159,33 @@ export default function SupervisorDashboardScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* Site picker (multi-site) — dropdown kecil */}
+      {sites.length > 1 && (
+        <View style={styles.siteBar}>
+          <TouchableOpacity style={styles.siteSelect} onPress={() => setSitePickerOpen(true)}>
+            <Text style={styles.siteSelectText} numberOfLines={1}>
+              {sites.find((s) => s.id === selectedSiteId)?.name ?? "Pilih site"}
+            </Text>
+            <Text style={styles.siteSelectChevron}>▾</Text>
+          </TouchableOpacity>
+          <Modal visible={sitePickerOpen} transparent animationType="fade" onRequestClose={() => setSitePickerOpen(false)}>
+            <TouchableOpacity style={styles.dropdownOverlay} activeOpacity={1} onPress={() => setSitePickerOpen(false)}>
+              <View style={styles.dropdownCard}>
+                {sites.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={[styles.dropdownItem, selectedSiteId === s.id && styles.dropdownItemActive]}
+                    onPress={() => { setSelectedSiteId(s.id); setSitePickerOpen(false); }}
+                  >
+                    <Text style={[styles.dropdownItemText, selectedSiteId === s.id && styles.dropdownItemTextActive]}>{s.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        </View>
+      )}
+
       {/* Tabs */}
       <View style={styles.tabs}>
         {(["team", "inspections", "overrides", "photos", "setup"] as Tab[]).map((t) => (
@@ -187,6 +224,12 @@ export default function SupervisorDashboardScreen() {
                       <Text style={styles.cardSub}>
                         {m.completedCheckpoints}/{m.totalCheckpoints} checkpoint selesai
                       </Text>
+                      <View style={styles.cardRow}>
+                        <Text style={styles.cardSub}>Jam kerja: {m.status === "Absen" ? "—" : fmtHM(m.kerjaMin)}{m.istirahatMin > 0 ? ` · Istirahat ${fmtHM(m.istirahatMin)}` : ""}</Text>
+                        <Text style={[styles.cardStatus, m.status === "Absen" ? styles.statusOut : m.status === "Lengkap" ? styles.statusIn : styles.statusWarn]}>
+                          {m.status}
+                        </Text>
+                      </View>
                     </View>
                   ))}
                   {members.length === 0 && (
@@ -280,6 +323,21 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", padding: 20, paddingTop: 60, backgroundColor: "#fff" },
   title: { fontSize: 20, fontWeight: "bold", color: "#111827" },
   logoutBtn: { color: "#dc2626", fontSize: 14 },
+  siteBar: { backgroundColor: "#fff", paddingHorizontal: 20, paddingBottom: 10 },
+  siteSelect: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#fff",
+    maxWidth: 220, alignSelf: "flex-start",
+  },
+  siteSelectText: { fontSize: 14, fontWeight: "600", color: "#111827", flexShrink: 1 },
+  siteSelectChevron: { fontSize: 12, color: "#6b7280", marginLeft: 10 },
+  dropdownOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-start", padding: 20 },
+  dropdownCard: { backgroundColor: "#fff", borderRadius: 10, padding: 6, width: 240, elevation: 4, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8 },
+  dropdownItem: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: 8 },
+  dropdownItemActive: { backgroundColor: "#eff6ff" },
+  dropdownItemText: { fontSize: 15, color: "#374151" },
+  dropdownItemTextActive: { color: "#2563eb", fontWeight: "700" },
   tabs: { flexDirection: "row", backgroundColor: "#fff", paddingHorizontal: 20, paddingBottom: 4 },
   tab: { flex: 1, paddingVertical: 10, alignItems: "center", borderBottomWidth: 2, borderBottomColor: "transparent" },
   tabActive: { borderBottomColor: "#2563eb" },
@@ -300,6 +358,7 @@ const styles = StyleSheet.create({
   cardStatus: { fontSize: 12, fontWeight: "600", paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
   statusIn: { color: "#16a34a", backgroundColor: "#f0fdf4" },
   statusOut: { color: "#dc2626", backgroundColor: "#fef2f2" },
+  statusWarn: { color: "#d97706", backgroundColor: "#fef3c7" },
   cardSub: { fontSize: 12, color: "#6b7280", marginTop: 4 },
   cardNote: { fontSize: 12, color: "#92400e", marginTop: 4, fontStyle: "italic" },
   empty: { textAlign: "center", color: "#9ca3af", paddingVertical: 40 },

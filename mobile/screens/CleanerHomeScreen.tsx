@@ -14,13 +14,15 @@ import LivenessCaptureScreen from "./LivenessCaptureScreen";
 
 type Screen = "home" | "scan" | "session" | "liveness";
 
-export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { checkpointType?: "cleaning" | "security" }) {
-  const { user, name, signOut } = useAuth();
+export default function CleanerHomeScreen({ checkpointType = "cleaning", supervisorMode = false }: { checkpointType?: "cleaning" | "security"; supervisorMode?: boolean }) {
+  const { user, name, sites, signOut } = useAuth();
   const [screen, setScreen] = useState<Screen>("home");
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState(false);
   const [checkedIn, setCheckedIn] = useState(false);
   const [onBreak, setOnBreak] = useState(false);
+  const [selectedSiteId, setSelectedSiteId] = useState<string | null>(null);
+  const [sitePickerOpen, setSitePickerOpen] = useState(false);
   const [siteName, setSiteName] = useState<string | null>(null);
   const [siteLat, setSiteLat] = useState<number | null>(null);
   const [siteLng, setSiteLng] = useState<number | null>(null);
@@ -44,7 +46,7 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
   const loadStatus = useCallback(async () => {
     setLoading(true);
     const [status, todaySessions] = await Promise.all([
-      getAttendanceStatus(checkpointType),
+      getAttendanceStatus(checkpointType, selectedSiteId ?? undefined),
       getTodaySessions(checkpointType),
     ]);
     setCheckedIn(status.checkedIn);
@@ -57,7 +59,14 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
     setTotalCP(status.totalCheckpoints);
     setSessions(todaySessions);
     setLoading(false);
-  }, [checkpointType]);
+  }, [checkpointType, selectedSiteId]);
+
+  // Default pilih site pertama (untuk multi-site: user pilih sebelum check-in)
+  useEffect(() => {
+    if (!selectedSiteId && sites.length > 0) {
+      setSelectedSiteId(sites[0].id);
+    }
+  }, [sites]);
 
   // Verifikasi liveness (anti foto statis): kamera inline 3 frame + kedipan/gerakan.
   // Frame terbaik sudah terkompres & terverifikasi wajah oleh LivenessCaptureScreen.
@@ -76,7 +85,7 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
   };
 
   const doSubmit = async (type: "check_in" | "check_out" | "break_start" | "break_end", photoUrl: string, loc: { lat: number; lng: number }, reason?: string) => {
-    const res = await submitAttendance(type, loc.lat, loc.lng, photoUrl, reason);
+    const res = await submitAttendance(type, loc.lat, loc.lng, photoUrl, reason, selectedSiteId ?? undefined);
     if (res.success) {
       Alert.alert("Berhasil", res.message);
       await loadStatus();
@@ -166,7 +175,7 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
 
   if (screen === "scan") return <View style={{flex:1}}><CheckpointScanScreen onSessionStarted={handleSessionStarted} /><TouchableOpacity style={{position:"absolute",top:60,left:20}} onPress={()=>setScreen("home")}><Text style={{color:"#6b7280"}}>Kembali</Text></TouchableOpacity></View>;
   if (screen === "session" && activeSessionId) return <CheckpointSessionScreen sessionId={activeSessionId} checkpointName={activeCheckpointName} onComplete={handleSessionDone} onBack={()=>setScreen("home")} />;
-  if (livenessMode && pendingAttendanceType) return <LivenessCaptureScreen onResult={handleLivenessResult} />;
+  if (livenessMode && pendingAttendanceType) return <LivenessCaptureScreen onResult={handleLivenessResult} rounds={1} />;
   if (loading) return <View style={S.center}><ActivityIndicator size="large" color="#2563eb" /></View>;
 
   return (
@@ -175,13 +184,40 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
         <View><Text style={S.greeting}>Halo, {name || "Cleaner"}!</Text><Text style={S.site}>{siteName||"Belum ditugaskan"}</Text></View>
         {pendingCount>0 && <View style={S.badge}><Text style={S.badgeText}>{pendingCount} pending</Text></View>}
       </View>
+      {sites.length > 1 && (
+        <View style={S.siteBar}>
+          <TouchableOpacity style={S.siteSelect} onPress={() => setSitePickerOpen(true)}>
+            <Text style={S.siteSelectText} numberOfLines={1}>
+              {sites.find((s) => s.id === selectedSiteId)?.name ?? "Pilih site"}
+            </Text>
+            <Text style={S.siteSelectChevron}>▾</Text>
+          </TouchableOpacity>
+          <Modal visible={sitePickerOpen} transparent animationType="fade" onRequestClose={() => setSitePickerOpen(false)}>
+            <TouchableOpacity style={S.dropdownOverlay} activeOpacity={1} onPress={() => setSitePickerOpen(false)}>
+              <View style={S.dropdownCard}>
+                {sites.map((s) => (
+                  <TouchableOpacity
+                    key={s.id}
+                    style={[S.dropdownItem, selectedSiteId === s.id && S.dropdownItemActive]}
+                    onPress={() => { setSelectedSiteId(s.id); setSitePickerOpen(false); }}
+                  >
+                    <Text style={[S.dropdownItemText, selectedSiteId === s.id && S.dropdownItemTextActive]}>{s.name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </TouchableOpacity>
+          </Modal>
+        </View>
+      )}
       <View style={S.statusCard}>
         <View style={S.statusRow}><Text style={S.statusLabel}>Status</Text>
           <Text style={[S.statusValue, onBreak ? S.statusBreak : checkedIn ? S.statusIn : S.statusOut]}>
             {onBreak ? "Beristirahat" : checkedIn ? "Sudah Check-in" : "Belum Check-in"}
           </Text>
         </View>
-        <View style={S.statusRow}><Text style={S.statusLabel}>Checkpoint</Text><Text style={S.progressValue}>{completedCP}/{totalCP} selesai</Text></View>
+        {!supervisorMode && (
+          <View style={S.statusRow}><Text style={S.statusLabel}>Checkpoint</Text><Text style={S.progressValue}>{completedCP}/{totalCP} selesai</Text></View>
+        )}
       </View>
 
       {!checkedIn ? (
@@ -206,10 +242,14 @@ export default function CleanerHomeScreen({ checkpointType = "cleaning" }: { che
           </TouchableOpacity>
         </>
       )}
-      <TouchableOpacity style={[S.scanBtn, (!checkedIn || onBreak) && S.btnDisabled]} onPress={() => setScreen("scan")} disabled={!checkedIn || onBreak}><Text style={S.scanBtnText}>Scan Checkpoint</Text></TouchableOpacity>
+      {!supervisorMode && (
+        <TouchableOpacity style={[S.scanBtn, (!checkedIn || onBreak) && S.btnDisabled]} onPress={() => setScreen("scan")} disabled={!checkedIn || onBreak}><Text style={S.scanBtnText}>Scan Checkpoint</Text></TouchableOpacity>
+      )}
+      {!supervisorMode && (
       <View style={S.sec}><Text style={S.secTitle}>Riwayat Hari Ini</Text>
         {sessions.length===0?<Text style={S.empty}>Belum ada sesi.</Text>:sessions.map(s=><TouchableOpacity key={s.id} style={S.sCard} onPress={s.status==="in_progress"?()=>{setActiveSessionId(s.id);setActiveCheckpointName(s.checkpoints?.name||"CP");setScreen("session");}:undefined}><View style={{flex:1}}><Text style={S.sName}>{s.checkpoints?.name||"CP"}</Text><Text style={S.sTime}>{new Date(s.started_at).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}{s.duration_minutes?` — ${s.duration_minutes}m`:""}</Text></View><Text style={[S.sStat,s.status==="completed"?S.sDone:s.status==="in_progress"?S.sProg:S.sExp]}>{s.status==="completed"?"Selesai":s.status==="in_progress"?"Berjalan":"Kedaluwarsa"}</Text></TouchableOpacity>)}
       </View>
+      )}
       {pendingItems.length>0 && <View style={S.sec}><Text style={S.secTitle}>Antrian Sinkronisasi</Text>{pendingItems.map((p,i)=><View key={i} style={[S.sCard,{flexDirection:"row",justifyContent:"space-between"}]}><View><Text style={{fontSize:13,fontWeight:"600"}}>{p.label}</Text><Text style={{fontSize:11,color:"#9ca3af"}}>{new Date(p.createdAt).toLocaleTimeString("id-ID",{hour:"2-digit",minute:"2-digit"})}</Text></View><Text style={{fontSize:11,fontWeight:"600",paddingHorizontal:8,paddingVertical:3,borderRadius:6,color:p.synced?"#16a34a":"#d97706",backgroundColor:p.synced?"#f0fdf4":"#fef3c7"}}>{p.synced?"Tersinkron":"Tersimpan lokal"}</Text></View>)}</View>}
       <TouchableOpacity style={S.logoutBtn} onPress={signOut}><Text style={S.logoutText}>Keluar</Text></TouchableOpacity>
       <Modal visible={showOverride} transparent animationType="fade">
@@ -231,6 +271,21 @@ const S = StyleSheet.create({
   headerRow:{flexDirection:"row",justifyContent:"space-between",alignItems:"flex-start",marginBottom:24},
   greeting:{fontSize:22,fontWeight:"bold",color:"#111827"},site:{fontSize:14,color:"#6b7280",marginTop:4},
   badge:{backgroundColor:"#fef3c7",borderRadius:12,paddingHorizontal:10,paddingVertical:4},badgeText:{color:"#92400e",fontSize:12,fontWeight:"600"},
+  siteBar: { marginBottom: 16, alignItems: "flex-start" },
+  siteSelect: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderWidth: 1, borderColor: "#d1d5db", borderRadius: 8,
+    paddingHorizontal: 12, paddingVertical: 8, backgroundColor: "#fff",
+    maxWidth: 220,
+  },
+  siteSelectText: { fontSize: 14, fontWeight: "600", color: "#111827", flexShrink: 1 },
+  siteSelectChevron: { fontSize: 12, color: "#6b7280", marginLeft: 10 },
+  dropdownOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.35)", justifyContent: "flex-start", padding: 20 },
+  dropdownCard: { backgroundColor: "#fff", borderRadius: 10, padding: 6, width: 240, elevation: 4, shadowColor: "#000", shadowOpacity: 0.15, shadowRadius: 8 },
+  dropdownItem: { paddingVertical: 12, paddingHorizontal: 12, borderRadius: 8 },
+  dropdownItemActive: { backgroundColor: "#eff6ff" },
+  dropdownItemText: { fontSize: 15, color: "#374151" },
+  dropdownItemTextActive: { color: "#2563eb", fontWeight: "700" },
   statusCard:{backgroundColor:"#fff",borderRadius:12,padding:20,marginBottom:24,elevation:2},
   statusRow:{flexDirection:"row",justifyContent:"space-between",marginBottom:12},statusLabel:{fontSize:14,color:"#6b7280"},
   statusValue:{fontSize:14,fontWeight:"600"},statusIn:{color:"#16a34a"},statusOut:{color:"#dc2626"},statusBreak:{color:"#d97706"},

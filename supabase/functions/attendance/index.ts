@@ -30,19 +30,35 @@ Deno.serve(async (req) => {
     .eq("auth_id", payload.sub)
     .single();
 
-  if (!dbUser || !["cleaner", "security"].includes(dbUser.role)) {
-    return err("Hanya cleaner/security yang bisa absensi", 403);
+  if (!dbUser || !["cleaner", "security", "supervisor"].includes(dbUser.role)) {
+    return err("Hanya cleaner/security/supervisor yang bisa absensi", 403);
   }
   if (!dbUser.site_id) {
     return err("Anda belum ditugaskan ke site manapun", 400);
   }
 
   const body = await req.json();
-  const { type, latitude, longitude, photo_base64, photo_url, override_reason } = body;
+  const { type, latitude, longitude, photo_base64, photo_url, override_reason, site_id } = body;
 
   const ALLOWED_TYPES = ["check_in", "check_out", "break_start", "break_end"];
   if (!ALLOWED_TYPES.includes(type) || !latitude || !longitude || (!photo_base64 && !photo_url)) {
     return err("Data tidak lengkap", 400);
+  }
+
+  // Site efektif: supervisor bisa pilih site (wajib & harus di user_sites);
+  // cleaner/security selalu pakai site sendiri.
+  let effectiveSiteId = dbUser.site_id;
+  if (dbUser.role === "supervisor") {
+    if (!site_id) return err("Supervisor wajib memilih site", 400);
+    const { data: userSites } = await supabase
+      .from("user_sites")
+      .select("site_id")
+      .eq("user_id", dbUser.id)
+      .eq("site_id", site_id);
+    if (!userSites || userSites.length === 0) {
+      return err("Site tidak ada di daftar site Anda", 403);
+    }
+    effectiveSiteId = site_id;
   }
 
   const isBreak = type === "break_start" || type === "break_end";
@@ -67,7 +83,7 @@ Deno.serve(async (req) => {
   const { data: site } = await supabase
     .from("sites")
     .select("latitude, longitude, radius_meters")
-    .eq("id", dbUser.site_id)
+    .eq("id", effectiveSiteId)
     .single();
 
   if (!site) return err("Site tidak ditemukan", 400);
@@ -112,7 +128,7 @@ Deno.serve(async (req) => {
   const isFlagged = !isBreak && !isWithinRadius && !!override_reason;
   const insertData: Record<string, unknown> = {
     user_id: dbUser.id,
-    site_id: dbUser.site_id,
+    site_id: effectiveSiteId,
     type,
     latitude,
     longitude,

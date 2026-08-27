@@ -8,6 +8,7 @@ import {
   statusCodes,
 } from "@react-native-google-signin/google-signin";
 import { supabase } from "../lib/supabase";
+import { getUserSites, UserSite } from "../lib/attendance";
 import { GOOGLE_WEB_CLIENT_ID } from "../lib/google-config";
 
 GoogleSignin.configure({
@@ -19,6 +20,7 @@ type AuthContextType = {
   user: User | null;
   name: string | null;
   role: string | null;
+  sites: UserSite[];
   hasProfile: boolean;
   hasSite: boolean;
   loading: boolean;
@@ -34,17 +36,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [name, setName] = useState<string | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [sites, setSites] = useState<UserSite[]>([]);
   const [hasProfile, setHasProfile] = useState(false);
   const [hasSite, setHasSite] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const refreshProfile = useCallback(async () => {
-    const { data: { user: authUser } } = await supabase.auth.getUser();
-    if (!authUser) {
+    const { data: { user: authUser }, error } = await supabase.auth.getUser();
+    if (error || !authUser) {
+      // Session rusak/di-revoke (mis. akun dihapus atau di-sign-out dari server)
+      // → kembali ke layar login, jangan terjebak di onboarding.
       setName(null);
       setRole(null);
+      setSites([]);
       setHasProfile(false);
       setHasSite(false);
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) supabase.auth.signOut().catch(() => {});
       return;
     }
     const { data: dbUser } = await supabase
@@ -56,6 +64,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     setRole(dbUser?.role ?? null);
     setHasProfile(!!dbUser?.phone);
     setHasSite(!!dbUser?.site_id);
+    getUserSites().then(setSites).catch(() => setSites([]));
   }, []);
 
   useEffect(() => {
@@ -133,7 +142,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ session, user, name, role, hasProfile, hasSite, loading, signInWithGoogle, signOut, refreshProfile }}
+      value={{ session, user, name, role, sites, hasProfile, hasSite, loading, signInWithGoogle, signOut, refreshProfile }}
     >
       {children}
     </AuthContext.Provider>

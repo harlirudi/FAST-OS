@@ -14,6 +14,8 @@ export type AttendanceStatus = {
   totalCheckpoints: number;
 };
 
+export type UserSite = { id: string; name: string };
+
 const EMPTY_STATUS: AttendanceStatus = {
   checkedIn: false,
   onBreak: false,
@@ -26,7 +28,32 @@ const EMPTY_STATUS: AttendanceStatus = {
   totalCheckpoints: 0,
 };
 
-export async function getAttendanceStatus(checkpointType: "cleaning" | "security" = "cleaning"): Promise<AttendanceStatus> {
+// Daftar SEMUA site milik user (dari user_sites; RLS user baca baris sendiri).
+// Untuk user multi-site (supervisor) dipakai di site picker.
+export async function getUserSites(): Promise<UserSite[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data: dbUser } = await supabase
+    .from("users")
+    .select("id")
+    .eq("auth_id", user.id)
+    .single();
+  if (!dbUser) return [];
+
+  const { data } = await supabase
+    .from("user_sites")
+    .select("sites(id, name)")
+    .eq("user_id", dbUser.id);
+  return (data || [])
+    .map((r: any) => r.sites)
+    .filter((s: any) => s != null) as UserSite[];
+}
+
+export async function getAttendanceStatus(
+  checkpointType: "cleaning" | "security" = "cleaning",
+  siteId?: string
+): Promise<AttendanceStatus> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return EMPTY_STATUS;
 
@@ -36,7 +63,8 @@ export async function getAttendanceStatus(checkpointType: "cleaning" | "security
     .eq("auth_id", user.id)
     .single();
 
-  if (!dbUser?.site_id) {
+  const effectiveSiteId = siteId ?? dbUser?.site_id;
+  if (!dbUser || !effectiveSiteId) {
     return EMPTY_STATUS;
   }
 
@@ -47,6 +75,7 @@ export async function getAttendanceStatus(checkpointType: "cleaning" | "security
     .from("attendance_logs")
     .select("type, timestamp")
     .eq("user_id", userId)
+    .eq("site_id", effectiveSiteId)
     .gte("timestamp", today)
     .order("timestamp", { ascending: false });
 
@@ -60,13 +89,13 @@ export async function getAttendanceStatus(checkpointType: "cleaning" | "security
   const { data: site } = await supabase
     .from("sites")
     .select("name, latitude, longitude, radius_meters")
-    .eq("id", dbUser.site_id)
+    .eq("id", effectiveSiteId)
     .single();
 
   const { count: total } = await supabase
     .from("checkpoints")
     .select("*", { count: "exact", head: true })
-    .eq("site_id", dbUser.site_id)
+    .eq("site_id", effectiveSiteId)
     .eq("type", checkpointType);
 
   const { count: completed } = await supabase
@@ -95,11 +124,12 @@ export async function submitAttendance(
   latitude: number,
   longitude: number,
   photoUri: string,
-  overrideReason?: string
+  overrideReason?: string,
+  siteId?: string
 ): Promise<{ success: boolean; message: string }> {
   // Offline: simpan ke antrian
   if (!isOnline()) {
-    await enqueue(type, { latitude, longitude, photoUrl: photoUri, reason: overrideReason } as any);
+    await enqueue(type, { latitude, longitude, photoUrl: photoUri, reason: overrideReason, site_id: siteId } as any);
     return { success: true, message: "Tersimpan lokal. Akan disinkron saat online." };
   }
 
@@ -123,6 +153,7 @@ export async function submitAttendance(
         longitude,
         photo_base64: photoBase64,
         override_reason: overrideReason || undefined,
+        site_id: siteId,
       }),
     }
   );

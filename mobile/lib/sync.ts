@@ -7,10 +7,10 @@ const QUEUE_KEY = "sync_queue";
 
 // Action registry — tambah entry di sini untuk action baru (satu tempat)
 type ActionPayloads = {
-  check_in: { latitude: number; longitude: number; photoUrl: string; reason?: string };
-  check_out: { latitude: number; longitude: number; photoUrl: string };
-  break_start: { latitude: number; longitude: number; photoUrl: string };
-  break_end: { latitude: number; longitude: number; photoUrl: string };
+  check_in: { latitude: number; longitude: number; photoUrl: string; reason?: string; site_id?: string };
+  check_out: { latitude: number; longitude: number; photoUrl: string; site_id?: string };
+  break_start: { latitude: number; longitude: number; photoUrl: string; site_id?: string };
+  break_end: { latitude: number; longitude: number; photoUrl: string; site_id?: string };
   checkpoint_start: { identifier: string; mode: "nfc" | "qr"; latitude: number; longitude: number };
   checkpoint_photo: { sessionId: string; photoType: "before" | "after"; photoUrl: string };
   checkpoint_complete: { sessionId: string; photoUrl: string; latitude: number; longitude: number };
@@ -45,7 +45,7 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
       const photo = await readLocalBase64(p.photoUrl);
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "check_in", latitude: p.latitude, longitude: p.longitude, photo_base64: photo, override_reason: p.reason }),
+        body: JSON.stringify({ type: "check_in", latitude: p.latitude, longitude: p.longitude, photo_base64: photo, override_reason: p.reason, site_id: p.site_id }),
       });
       if (!res.ok) throw new Error(await res.text());
     },
@@ -56,7 +56,7 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
       const photo = await readLocalBase64(p.photoUrl);
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "check_out", latitude: p.latitude, longitude: p.longitude, photo_base64: photo }),
+        body: JSON.stringify({ type: "check_out", latitude: p.latitude, longitude: p.longitude, photo_base64: photo, site_id: p.site_id }),
       });
       if (!res.ok) throw new Error(await res.text());
     },
@@ -67,7 +67,7 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
       const photo = await readLocalBase64(p.photoUrl);
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "break_start", latitude: p.latitude, longitude: p.longitude, photo_base64: photo }),
+        body: JSON.stringify({ type: "break_start", latitude: p.latitude, longitude: p.longitude, photo_base64: photo, site_id: p.site_id }),
       });
       if (!res.ok) throw new Error(await res.text());
     },
@@ -78,7 +78,7 @@ const handlers: Record<ActionTypes, { label: string; handler: ActionHandler }> =
       const photo = await readLocalBase64(p.photoUrl);
       const res = await fetch(`${supabaseUrl}/functions/v1/attendance`, {
         method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ type: "break_end", latitude: p.latitude, longitude: p.longitude, photo_base64: photo }),
+        body: JSON.stringify({ type: "break_end", latitude: p.latitude, longitude: p.longitude, photo_base64: photo, site_id: p.site_id }),
       });
       if (!res.ok) throw new Error(await res.text());
     },
