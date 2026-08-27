@@ -60,9 +60,10 @@ function EditUserDialog({ user, onSaved }: { user: User; onSaved: () => void }) 
   const handleSubmit = async (formData: FormData) => {
     setSaving(true);
     setSaveError("");
-    // Supervisor: multi-site dari checkbox (state). Cleaner/Security: 1 site
-    // dari dropdown (hidden input FormSelect sudah ikut terkirim).
+    // Supervisor: multi-site. Checkbox sudah otomatis masuk FormData, tapi
+    // hapus dulu lalu tulis ulang dari state agar tidak dobel (duplicate key).
     if (isMultiSite) {
+      formData.delete("site_ids");
       selectedSites.forEach((siteId) => formData.append("site_ids", siteId));
     }
     const result = await updateUserRole(user.id, formData);
